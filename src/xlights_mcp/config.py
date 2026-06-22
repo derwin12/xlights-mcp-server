@@ -31,6 +31,7 @@ class AudioConfig(BaseModel):
     sample_rate: int = 22050
     frame_rate_ms: int = 25  # xLights standard: 25ms per frame (40fps)
     stem_separation_timeout_s: float = 180.0
+    whisper_model: str = "small"  # "tiny"/"base" are fast but noticeably less accurate
 
 
 class ServerConfig(BaseModel):

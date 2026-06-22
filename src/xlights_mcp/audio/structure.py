@@ -34,6 +34,15 @@ class SongSection(BaseModel):
         return self.end_time - self.start_time
 
 
+# Section boundaries are seconds-scale, not millisecond-scale — a coarse hop
+# length keeps the self-similarity matrix (O(n^2) in frame count) small. The
+# default librosa hop_length=512 (~23ms/frame) produces ~8800 frames for a
+# 3.5 minute song, i.e. a 77M-entry dense matrix that can take many minutes
+# to build; 2048 (~93ms/frame) cuts that to ~550k entries with no real loss
+# of boundary precision.
+_STRUCTURE_HOP_LENGTH = 2048
+
+
 def detect_structure(audio_path: Path, sr: int = 22050) -> list[SongSection]:
     """Detect song structure (verse/chorus/bridge/etc.).
 
@@ -47,8 +56,9 @@ def detect_structure(audio_path: Path, sr: int = 22050) -> list[SongSection]:
     duration = librosa.get_duration(y=y, sr=sr)
 
     # Extract features for structure analysis
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    hop = _STRUCTURE_HOP_LENGTH
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=hop)
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop)
     features = np.vstack([mfcc, chroma])
 
     # Build self-similarity matrix
@@ -60,7 +70,7 @@ def detect_structure(audio_path: Path, sr: int = 22050) -> list[SongSection]:
     kernel_size = max(8, min(64, features.shape[1] // 20))
     novelty = _compute_novelty(rec, kernel_size=kernel_size)
     boundary_frames = _detect_boundaries(novelty, min_section_frames=15, peak_threshold=0.1)
-    boundary_times = librosa.frames_to_time(boundary_frames, sr=sr).tolist()
+    boundary_times = librosa.frames_to_time(boundary_frames, sr=sr, hop_length=hop).tolist()
 
     # If we got too few sections, fall back to energy-based segmentation
     min_sections = max(4, int(duration / 30))  # at least 1 section per 30s

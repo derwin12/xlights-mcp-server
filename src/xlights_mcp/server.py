@@ -716,6 +716,7 @@ def create_sequence(
     theme: str | None = None,
     vocal_assignments: dict[str, str] | None = None,
     show_name: str | None = None,
+    include_stems: bool = True,
 ) -> dict:
     """Create an xLights sequence from a music file.
 
@@ -724,8 +725,9 @@ def create_sequence(
 
     Args:
         mp3_path: Path to the .mp3 file
-        mode: Generation mode — "auto" (AI picks everything), "guided" (interactive),
-              or "template" (apply saved recipes)
+        mode: Generation mode — "auto" (AI picks everything) or "guided"
+              (interactive, previews the plan before writing the file).
+              "template" is listed in xLights' UI but not implemented here yet.
         palette_hint: Optional color hint (e.g., "red and green", "orange and purple")
         theme: Optional theme hint (e.g., "christmas", "halloween", "energetic")
         vocal_assignments: Optional mapping of model names to vocal track names.
@@ -736,6 +738,11 @@ def create_sequence(
         show_name: Which show folder to generate the sequence in (e.g., "christmas",
             "halloween"). If omitted and multiple shows exist, returns available
             shows so you can ask the user which one to use.
+        include_stems: Run Demucs source separation (requires the
+            'separation' optional dependency) so "auto" mode can vary effects
+            by which instrument dominates each section, instead of always
+            defaulting to "other". Bounded by a timeout so it can't hang;
+            falls back to no stems if Demucs isn't installed or times out.
     """
     from xlights_mcp.sequencer.engine import generate_sequence
 
@@ -759,6 +766,7 @@ def create_sequence(
         theme=theme,
         audio_config=config.audio,
         vocal_assignments=vocal_assignments,
+        include_stems=include_stems,
     )
     return result
 

@@ -396,6 +396,7 @@ def generate_sequence(
     theme: str | None = None,
     audio_config: AudioConfig | None = None,
     vocal_assignments: dict[str, str] | None = None,
+    include_stems: bool = True,
 ) -> dict:
     """Generate a complete xLights sequence from a music file.
 
@@ -404,6 +405,10 @@ def generate_sequence(
             Use "all" as key to assign a track to all singing models.
             If None and singing models exist, returns discovery info instead
             of generating, so the caller can prompt the user.
+        include_stems: Run Demucs source separation so effect variety can be
+            driven by which instrument (drums/bass/vocals/other) dominates
+            each section, instead of always falling back to "other". Bounded
+            by audio_config.stem_separation_timeout_s.
     """
     if not show_path or not show_path.exists():
         return {"error": f"Show path not found: {show_path}"}
@@ -412,12 +417,15 @@ def generate_sequence(
     if not show_config.models:
         return {"error": "No models found in show configuration"}
 
-    analysis = full_analysis(mp3_path, audio_config)
+    if audio_config is None:
+        audio_config = AudioConfig()
+
+    analysis = full_analysis(mp3_path, audio_config, include_stems=include_stems)
 
     if mode == "auto":
         return _generate_auto(
             analysis, show_config, mp3_path, palette_hint, theme,
-            vocal_assignments=vocal_assignments,
+            vocal_assignments=vocal_assignments, audio_config=audio_config,
         )
     elif mode == "guided":
         return _generate_guided_preview(analysis, show_config)
@@ -473,6 +481,7 @@ def _generate_auto(
     palette_hint: str | None,
     theme: str | None,
     vocal_assignments: dict[str, str] | None = None,
+    audio_config: AudioConfig | None = None,
 ) -> dict:
     """Professional-quality automatic sequence generation.
 
@@ -756,7 +765,8 @@ def _generate_auto(
 
     if singing_models:
         # Extract all available vocal tracks
-        vocal_tracks = _try_extract_vocal_tracks(mp3_path)
+        whisper_model = (audio_config or AudioConfig()).whisper_model
+        vocal_tracks = _try_extract_vocal_tracks(mp3_path, whisper_model=whisper_model)
 
         if vocal_tracks:
             has_lyrics = True
@@ -1047,11 +1057,11 @@ def _try_extract_lyrics(mp3_path: Path):
         return None
 
 
-def _try_extract_vocal_tracks(mp3_path: Path) -> list:
+def _try_extract_vocal_tracks(mp3_path: Path, whisper_model: str = "small") -> list:
     """Try to extract all vocal timing tracks. Returns empty list if unavailable."""
     try:
         from xlights_mcp.audio.lyrics import extract_vocal_tracks
-        tracks = extract_vocal_tracks(mp3_path, whisper_model="base")
+        tracks = extract_vocal_tracks(mp3_path, whisper_model=whisper_model)
         return [t for t in tracks if t.available and t.phonemes]
     except ImportError:
         logger.info("Whisper not installed — skipping vocal track extraction")
