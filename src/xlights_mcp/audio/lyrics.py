@@ -26,6 +26,23 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Loading a Whisper model from disk takes several seconds and the model is
+# stateless across calls, so keep one instance per size cached in-process
+# rather than reloading it on every extract_lyrics() call.
+_whisper_model_cache: dict[str, "whisper.Whisper"] = {}
+
+
+def _load_whisper_model(whisper_model: str):
+    import whisper
+
+    cached = _whisper_model_cache.get(whisper_model)
+    if cached is not None:
+        return cached
+
+    model = whisper.load_model(whisper_model)
+    _whisper_model_cache[whisper_model] = model
+    return model
+
 
 class PhonemeEvent(BaseModel):
     """A single phoneme at a specific time."""
@@ -142,7 +159,7 @@ def extract_lyrics(
         except ImportError:
             pass
 
-        model = whisper.load_model(whisper_model)
+        model = _load_whisper_model(whisper_model)
         result = model.transcribe(
             str(audio_path),
             word_timestamps=True,

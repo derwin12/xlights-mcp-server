@@ -90,43 +90,42 @@ def separate_stems(
         except ImportError:
             pass
 
-        # Try newer demucs.api first, fall back to CLI-based separation
-        try:
-            import demucs.api
-            separator = demucs.api.Separator(model=model)
-            _, outputs = separator.separate_audio_file(str(audio_path))
+        # Run the model directly via demucs' low-level API (pretrained.get_model +
+        # apply.apply_model), saving with soundfile. This sidesteps two broken
+        # paths: the installed demucs==4.0.1 has no demucs.api module at all
+        # (ModuleNotFoundError, not ImportError, in this release), and the CLI
+        # (`python -m demucs.separate`) saves via torchaudio.save, which on
+        # this torch/torchaudio pairing requires the optional `torchcodec`
+        # package (itself broken without a matching FFmpeg shared-lib build).
+        # librosa/soundfile have no such dependency.
+        import numpy as np
+        import soundfile as sf
+        import torch
+        from demucs.apply import apply_model
+        from demucs.pretrained import get_model
 
-            import soundfile as sf
-            for stem_name, tensor in outputs.items():
-                out_path = output_dir / f"{stem_name}.wav"
-                audio_np = tensor.cpu().numpy()
-                if audio_np.ndim > 1:
-                    audio_np = audio_np.T
-                sf.write(str(out_path), audio_np, separator.samplerate)
-                setattr(result_stems, stem_name, str(out_path))
-        except (ImportError, AttributeError):
-            # Older demucs — use CLI-style separation
-            import subprocess
-            import sys
-            result = subprocess.run(
-                [sys.executable, "-m", "demucs.separate",
-                 "-n", model,
-                 "-o", str(output_dir.parent),
-                 str(audio_path)],
-                capture_output=True, text=True, timeout=timeout_s,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"demucs failed: {result.stderr[-1000:]}")
+        dmodel = get_model(model)
+        dmodel.eval()
 
-            # Demucs CLI outputs to: output_dir.parent / model / audio_stem / *.wav
-            cli_out = output_dir.parent / model / audio_path.stem
-            import shutil
-            for stem_name in ("vocals", "drums", "bass", "other"):
-                src = cli_out / f"{stem_name}.wav"
-                if src.exists():
-                    dst = expected[stem_name]
-                    shutil.move(str(src), str(dst))
-                    setattr(result_stems, stem_name, str(dst))
+        wav, native_sr = sf.read(str(audio_path), dtype="float32", always_2d=True)
+        wav = wav.T  # (channels, frames)
+        if wav.shape[0] == 1:
+            wav = np.repeat(wav, 2, axis=0)
+        elif wav.shape[0] > 2:
+            wav = wav[:2]
+
+        if native_sr != dmodel.samplerate:
+            import librosa
+            wav = librosa.resample(wav, orig_sr=native_sr, target_sr=dmodel.samplerate)
+
+        mix = torch.from_numpy(wav).float().unsqueeze(0)  # (1, channels, frames)
+        with torch.no_grad():
+            sources = apply_model(dmodel, mix, device="cpu", progress=False)[0]
+
+        for stem_name, source in zip(dmodel.sources, sources):
+            out_path = output_dir / f"{stem_name}.wav"
+            sf.write(str(out_path), source.numpy().T, dmodel.samplerate)
+            setattr(result_stems, stem_name, str(out_path))
 
         logger.info(f"Stems saved to {output_dir}")
         return result_stems
