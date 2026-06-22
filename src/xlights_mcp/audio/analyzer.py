@@ -135,7 +135,7 @@ class SongAnalysis(BaseModel):
 # session (analyze_song, preview_plan, create_sequence) would otherwise redo
 # it from scratch every time.
 _MAX_CACHE_ENTRIES = 8
-_analysis_cache: dict[tuple[str, int, int, int], SongAnalysis] = {}
+_analysis_cache: dict[tuple[str, int, int, int, bool], SongAnalysis] = {}
 
 
 def full_analysis(
@@ -158,7 +158,7 @@ def full_analysis(
 
     sr = audio_config.sample_rate
     stat = audio_path.stat()
-    cache_key = (str(audio_path.resolve()), stat.st_mtime_ns, stat.st_size, sr)
+    cache_key = (str(audio_path.resolve()), stat.st_mtime_ns, stat.st_size, sr, include_stems)
 
     cached = _analysis_cache.get(cache_key)
     if cached is not None:
@@ -172,15 +172,21 @@ def full_analysis(
     spectrum = analyze_spectrum(audio_path, sr=sr)
     sections = detect_structure(audio_path, sr=sr)
 
-    # Always try stem separation (results are cached)
+    # Stem separation (Demucs) is opt-in: it's CPU-bound and can take minutes
+    # per song with no progress feedback, which looks like a hang to a caller
+    # waiting on the tool call. Skipped unless include_stems=True.
     stems = StemPaths()
     stem_analysis = StemAnalysis()
-    try:
-        stems = separate_stems(audio_path)
-        if stems.available:
-            stem_analysis = analyze_stems(stems, sr=sr)
-    except Exception as e:
-        logger.info(f"Stem analysis unavailable: {e}")
+    if include_stems:
+        try:
+            stems = separate_stems(
+                audio_path, model=audio_config.demucs_model,
+                timeout_s=audio_config.stem_separation_timeout_s,
+            )
+            if stems.available:
+                stem_analysis = analyze_stems(stems, sr=sr)
+        except Exception as e:
+            logger.info(f"Stem analysis unavailable: {e}")
 
     analysis = SongAnalysis(
         file_path=str(audio_path),

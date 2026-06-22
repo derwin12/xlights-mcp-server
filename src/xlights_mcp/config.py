@@ -30,6 +30,7 @@ class AudioConfig(BaseModel):
     demucs_model: str = "htdemucs"
     sample_rate: int = 22050
     frame_rate_ms: int = 25  # xLights standard: 25ms per frame (40fps)
+    stem_separation_timeout_s: float = 180.0
 
 
 class ServerConfig(BaseModel):

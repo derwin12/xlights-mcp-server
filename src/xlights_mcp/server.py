@@ -618,7 +618,9 @@ def save_sequence_live(
 
 
 @mcp.tool()
-def analyze_song(mp3_path: str, detail: str = "summary") -> dict:
+def analyze_song(
+    mp3_path: str, detail: str = "summary", include_stems: bool = False
+) -> dict:
     """Analyze a music file for light show sequencing.
 
     Performs full audio analysis: beat detection, song structure,
@@ -629,6 +631,10 @@ def analyze_song(mp3_path: str, detail: str = "summary") -> dict:
         detail: "summary" (counts and key stats, default) or "full" (every
             per-frame beat/energy/onset value — large, only request this if
             you specifically need raw timeseries data)
+        include_stems: Also run Demucs source separation (drums/bass/vocals/
+            other) for per-stem onset/energy data. Off by default — it's
+            CPU-bound and can take several minutes per song the first time
+            a given file is analyzed (subsequent calls hit the on-disk cache).
     """
     from xlights_mcp.audio.analyzer import full_analysis
 
@@ -640,7 +646,7 @@ def analyze_song(mp3_path: str, detail: str = "summary") -> dict:
         return {"error": f"Invalid detail '{detail}'. Use: summary, full"}
 
     config = get_config()
-    analysis = full_analysis(path, config.audio)
+    analysis = full_analysis(path, config.audio, include_stems=include_stems)
     return analysis.model_dump() if detail == "full" else analysis.summary()
 
 

@@ -24,16 +24,26 @@ def separate_stems(
     audio_path: Path,
     output_dir: Path | None = None,
     model: str = "htdemucs",
+    timeout_s: float = 180.0,
 ) -> StemPaths:
     """Separate audio into stems using Demucs.
 
     Requires the 'separation' optional dependency:
         pip install xlights-mcp-server[separation]
 
+    Demucs separation is CPU-bound and can take minutes per song with no
+    progress feedback, so it's bounded by `timeout_s` — if it doesn't finish
+    in time this returns `StemPaths(available=False)` instead of hanging
+    the caller indefinitely. The underlying worker thread is not killed (no
+    cross-platform way to cancel CPU-bound work in-process); it keeps
+    running and populates the on-disk cache for next time, but this call
+    returns either way.
+
     Args:
         audio_path: Path to audio file
         output_dir: Where to save stems (defaults to audio_cache)
         model: Demucs model name
+        timeout_s: Max seconds to wait for separation before giving up
     """
     try:
         import torch
@@ -68,7 +78,9 @@ def separate_stems(
 
     logger.info(f"Separating stems with {model}: {audio_path}")
 
-    try:
+    def do_separation() -> StemPaths:
+        result_stems = StemPaths(available=True)
+
         # Fix SSL cert issues on macOS
         import os
         try:
@@ -91,7 +103,7 @@ def separate_stems(
                 if audio_np.ndim > 1:
                     audio_np = audio_np.T
                 sf.write(str(out_path), audio_np, separator.samplerate)
-                setattr(stems, stem_name, str(out_path))
+                setattr(result_stems, stem_name, str(out_path))
         except (ImportError, AttributeError):
             # Older demucs — use CLI-style separation
             import subprocess
@@ -101,7 +113,7 @@ def separate_stems(
                  "-n", model,
                  "-o", str(output_dir.parent),
                  str(audio_path)],
-                capture_output=True, text=True, timeout=600,
+                capture_output=True, text=True, timeout=timeout_s,
             )
             if result.returncode != 0:
                 raise RuntimeError(f"demucs failed: {result.stderr[-1000:]}")
@@ -114,11 +126,31 @@ def separate_stems(
                 if src.exists():
                     dst = expected[stem_name]
                     shutil.move(str(src), str(dst))
-                    setattr(stems, stem_name, str(dst))
+                    setattr(result_stems, stem_name, str(dst))
 
         logger.info(f"Stems saved to {output_dir}")
-    except Exception as e:
-        logger.error(f"Stem separation failed: {e}")
-        stems.available = False
+        return result_stems
 
-    return stems
+    import concurrent.futures
+
+    # Not a context manager: ThreadPoolExecutor.__exit__ calls shutdown(wait=True),
+    # which would block on the worker thread and defeat the timeout below.
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(do_separation)
+    try:
+        result = future.result(timeout=timeout_s)
+        executor.shutdown(wait=False)
+        return result
+    except concurrent.futures.TimeoutError:
+        executor.shutdown(wait=False)
+        logger.warning(
+            f"Stem separation exceeded {timeout_s:.0f}s timeout for "
+            f"{audio_path.name} — continuing without stems. The "
+            "separation may still finish in the background and "
+            "populate the cache for next time."
+        )
+        return StemPaths(available=False)
+    except Exception as e:
+        executor.shutdown(wait=False)
+        logger.error(f"Stem separation failed: {e}")
+        return StemPaths(available=False)
