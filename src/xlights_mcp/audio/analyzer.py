@@ -76,6 +76,67 @@ class SongAnalysis(BaseModel):
     def duration_ms(self) -> int:
         return int(self.duration_seconds * 1000)
 
+    def summary(self) -> dict:
+        """Condensed view of the analysis — counts and key stats instead of
+        the full per-frame beat/energy/onset arrays.
+
+        Use this for anything that doesn't need raw sample-level data; it's
+        orders of magnitude smaller than `model_dump()`.
+        """
+        return {
+            "file_path": self.file_path,
+            "file_name": self.file_name,
+            "duration_seconds": self.duration_seconds,
+            "beats": {
+                "tempo": self.beats.tempo,
+                "beats_per_bar": self.beats.beats_per_bar,
+                "beat_count": len(self.beats.beat_times),
+                "downbeat_count": len(self.beats.downbeat_times),
+                "onset_count": len(self.beats.onset_times),
+            },
+            "spectrum": {
+                "peak_loudness_time": self.spectrum.peak_loudness_time,
+                "average_loudness": self.spectrum.average_loudness,
+                "dynamic_range": self.spectrum.dynamic_range,
+                "bands": [
+                    {
+                        "name": b.name,
+                        "freq_range": b.freq_range,
+                        "peak_count": len(b.peak_times),
+                    }
+                    for b in self.spectrum.bands
+                ],
+            },
+            "sections": [s.model_dump() for s in self.sections],
+            "stems": {
+                "available": self.stems.available,
+                "stems_present": [
+                    name
+                    for name in ("vocals", "drums", "bass", "other")
+                    if getattr(self.stems, name)
+                ],
+            },
+            "stem_analysis": {
+                "available": self.stem_analysis.available,
+                "stems": {
+                    name: {
+                        "onset_count": len(s.onset_times),
+                        "mean_energy": s.mean_energy,
+                    }
+                    for name, s in self.stem_analysis.stems.items()
+                },
+            },
+        }
+
+
+# Cache of completed analyses, keyed by resolved path + mtime + size + sample
+# rate. Audio analysis (beat tracking, structure detection, spectrum) is
+# expensive — repeated tool calls against the same file within a server
+# session (analyze_song, preview_plan, create_sequence) would otherwise redo
+# it from scratch every time.
+_MAX_CACHE_ENTRIES = 8
+_analysis_cache: dict[tuple[str, int, int, int], SongAnalysis] = {}
+
 
 def full_analysis(
     audio_path: Path,
@@ -83,6 +144,9 @@ def full_analysis(
     include_stems: bool = False,
 ) -> SongAnalysis:
     """Run the complete audio analysis pipeline.
+
+    Results are cached in-process per (file path, mtime, size, sample rate),
+    so calling this repeatedly for the same unchanged file is cheap.
 
     Args:
         audio_path: Path to the audio file (.mp3, .wav, etc.)
@@ -93,6 +157,14 @@ def full_analysis(
         audio_config = AudioConfig()
 
     sr = audio_config.sample_rate
+    stat = audio_path.stat()
+    cache_key = (str(audio_path.resolve()), stat.st_mtime_ns, stat.st_size, sr)
+
+    cached = _analysis_cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"Using cached analysis for {audio_path.name}")
+        return cached
+
     logger.info(f"Starting full analysis: {audio_path}")
 
     # Run all analyses
@@ -128,6 +200,10 @@ def full_analysis(
         f"{len(beats.beat_times)} beats, "
         f"stems={'yes' if stem_analysis.available else 'no'}"
     )
+
+    if len(_analysis_cache) >= _MAX_CACHE_ENTRIES:
+        _analysis_cache.pop(next(iter(_analysis_cache)))
+    _analysis_cache[cache_key] = analysis
 
     return analysis
 

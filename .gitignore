@@ -17,3 +17,4 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+.dual-graph/

@@ -18,6 +18,8 @@ class EffectSummary(BaseModel):
     start_time_ms: int
     end_time_ms: int
     palette_ref: str = ""
+    layer: int = 0
+    index: int = 0  # position within its layer — pass to update_effect/delete_effect
 
 
 class ModelEffects(BaseModel):
@@ -49,8 +51,14 @@ class SequenceSummary(BaseModel):
     effect_types_used: list[str] = Field(default_factory=list)
 
 
-def read_xsq_summary(xsq_path: Path) -> dict:
-    """Parse an .xsq file and return a structured summary."""
+def read_xsq_summary(xsq_path: Path, model_name: str | None = None) -> dict:
+    """Parse an .xsq file and return a structured summary.
+
+    By default each model only reports its effect count, not the full
+    effect-by-effect timeline — sequences with thousands of placements
+    would otherwise produce multi-megabyte output. Pass `model_name` to
+    get the full per-effect timeline for just that one model.
+    """
     try:
         tree = ET.parse(xsq_path)
     except ET.ParseError as e:
@@ -93,34 +101,40 @@ def read_xsq_summary(xsq_path: Path) -> dict:
 
     if element_effects is not None:
         for elem in element_effects:
-            model_name = elem.get("name", "")
+            elem_name = elem.get("name", "")
             model_type = elem.get("type", "model")
+            include_effects = model_name is not None and elem_name == model_name
 
             effects_list = []
-            for layer in elem:
-                for effect in layer:
+            effect_count = 0
+            for layer_idx, layer in enumerate(elem):
+                for eff_idx, effect in enumerate(layer):
                     eff_name = effect.get("name", "")
-                    start = int(effect.get("startTime", "0"))
-                    end = int(effect.get("endTime", "0"))
-                    palette = effect.get("palette", "")
-
-                    effects_list.append(
-                        EffectSummary(
-                            name=eff_name,
-                            start_time_ms=start,
-                            end_time_ms=end,
-                            palette_ref=palette,
-                        )
-                    )
                     effect_types.add(eff_name)
+                    effect_count += 1
                     total_placements += 1
 
-            if effects_list:
+                    if include_effects:
+                        start = int(effect.get("startTime", "0"))
+                        end = int(effect.get("endTime", "0"))
+                        palette = effect.get("palette", "")
+                        effects_list.append(
+                            EffectSummary(
+                                name=eff_name,
+                                start_time_ms=start,
+                                end_time_ms=end,
+                                palette_ref=palette,
+                                layer=layer_idx,
+                                index=eff_idx,
+                            )
+                        )
+
+            if effect_count:
                 summary.models_with_effects.append(
                     ModelEffects(
-                        model_name=model_name,
+                        model_name=elem_name,
                         model_type=model_type,
-                        effect_count=len(effects_list),
+                        effect_count=effect_count,
                         effects=effects_list,
                     )
                 )

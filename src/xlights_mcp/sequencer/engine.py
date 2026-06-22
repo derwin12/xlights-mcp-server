@@ -504,11 +504,14 @@ def _generate_auto(
     for gname, members in groups.items():
         logger.info(f"  Group '{gname}': {[m.name for m in members]}")
 
-    # Identify singing models (models with face definitions) — exclude from regular pipeline
+    # Identify singing models (models with face definitions) — exclude from regular pipeline.
+    # Trees and Matrices are excluded even if they carry face definitions — those display
+    # types are typically used for ambient/pixel effects, not lip-synced singing faces.
+    SINGING_EXCLUDED_DISPLAY_TYPES = {"tree", "matrix"}
     singing_models: dict[str, str] = {}  # model_name → face_definition_name
     singing_model_names: set[str] = set()
     for m in show_config.models:
-        if m.face_definitions:
+        if m.face_definitions and m.display_as.lower() not in SINGING_EXCLUDED_DISPLAY_TYPES:
             singing_models[m.name] = m.face_definitions[0]
             singing_model_names.add(m.name)
 
@@ -675,16 +678,54 @@ def _generate_auto(
     for model in ungrouped:
         generate_for_models([model.name], model.model_category, model.name)
 
-    # --- Instrument timing tracks from stem onsets ---
+    # --- Beats / Downbeats / Sections timing tracks ---
     timing_tracks: list[TimingTrack] = []
+    beat_dur_ms = int(60000 / max(analysis.beats.tempo, 60))
+    beat_label_dur = min(beat_dur_ms // 2, 200)
 
+    if analysis.beats.beat_times:
+        beat_labels = [
+            TimingTrackLabel(
+                label="x",
+                start_time_ms=int(t * 1000),
+                end_time_ms=int(t * 1000) + beat_label_dur,
+            )
+            for t in analysis.beats.beat_times
+        ]
+        timing_tracks.append(TimingTrack(name="Beats", labels=[beat_labels]))
+        logger.info(f"Added 'Beats' timing track: {len(beat_labels)} beats")
+
+    if analysis.beats.downbeat_times:
+        downbeat_labels = [
+            TimingTrackLabel(
+                label="1",
+                start_time_ms=int(t * 1000),
+                end_time_ms=int(t * 1000) + beat_label_dur,
+            )
+            for t in analysis.beats.downbeat_times
+        ]
+        timing_tracks.append(TimingTrack(name="Downbeats", labels=[downbeat_labels]))
+        logger.info(f"Added 'Downbeats' timing track: {len(downbeat_labels)} downbeats")
+
+    if analysis.sections:
+        section_labels = [
+            TimingTrackLabel(
+                label=section.label,
+                start_time_ms=section.start_time_ms,
+                end_time_ms=section.end_time_ms,
+            )
+            for section in analysis.sections
+        ]
+        timing_tracks.append(TimingTrack(name="Sections", labels=[section_labels]))
+        logger.info(f"Added 'Sections' timing track: {len(section_labels)} sections")
+
+    # --- Instrument timing tracks from stem onsets ---
     if analysis.stem_analysis.available:
         stem_track_map = {
             "drums": "Drums",
             "bass": "Bass",
             "other": "Instruments",
         }
-        beat_dur_ms = int(60000 / max(analysis.beats.tempo, 60))
         onset_label_dur = min(beat_dur_ms // 2, 200)  # label duration for onset markers
 
         for stem_name, track_name in stem_track_map.items():

@@ -248,13 +248,16 @@ def list_sequences() -> dict:
 
 
 @mcp.tool()
-def inspect_sequence(sequence_name: str) -> dict:
+def inspect_sequence(sequence_name: str, model_name: str | None = None) -> dict:
     """Inspect an existing xLights sequence file.
 
-    Shows the song info, duration, models used, and effect summary.
+    Shows the song info, duration, models used, and effect summary. By
+    default each model only reports its effect count (compact); pass
+    model_name to see the full effect-by-effect timeline for one model.
 
     Args:
         sequence_name: Name of the sequence (without .xsq extension)
+        model_name: Optional model name to drill into its full effect timeline
     """
     from xlights_mcp.xlights.xsq_reader import read_xsq_summary
 
@@ -267,7 +270,7 @@ def inspect_sequence(sequence_name: str) -> dict:
     if not xsq_path.exists():
         return {"error": f"Sequence not found: {xsq_path}"}
 
-    return read_xsq_summary(xsq_path)
+    return read_xsq_summary(xsq_path, model_name=model_name)
 
 
 @mcp.tool()
@@ -282,12 +285,280 @@ def list_effects() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Sequence Editing Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def add_effect(
+    sequence_name: str,
+    model_name: str,
+    effect_name: str,
+    start_time_ms: int,
+    end_time_ms: int,
+    layer: int = 0,
+    settings: dict[str, str] | None = None,
+    colors: list[str] | None = None,
+) -> dict:
+    """Add an effect to a model in an existing xLights sequence.
+
+    Writes the change directly into the .xsq file. A timestamped backup of
+    the previous version is kept alongside it (e.g. "Song.xsq.bak.20260621120000").
+    Returns the layer/index of the new effect, which update_effect and
+    delete_effect use to address it later.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension)
+        model_name: Model to place the effect on
+        effect_name: xLights effect type (e.g. "Chase", "Twinkle", "Shockwave")
+        start_time_ms: Effect start time in milliseconds
+        end_time_ms: Effect end time in milliseconds
+        layer: Effect layer index (0 = bottom layer)
+        settings: Optional effect parameter dict (E_SLIDER_..., E_CHECKBOX_..., etc.)
+        colors: Optional list of hex colors (e.g. ["#FF0000", "#00FF00"]) for a new palette
+    """
+    from xlights_mcp.xlights.xsq_editor import add_effect as _add_effect
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    return _add_effect(
+        xsq_path, model_name, effect_name, start_time_ms, end_time_ms,
+        settings=settings, layer=layer, colors=colors,
+    )
+
+
+@mcp.tool()
+def update_effect(
+    sequence_name: str,
+    model_name: str,
+    layer: int,
+    index: int,
+    effect_name: str | None = None,
+    start_time_ms: int | None = None,
+    end_time_ms: int | None = None,
+    settings: dict[str, str] | None = None,
+    colors: list[str] | None = None,
+) -> dict:
+    """Update an existing effect in a sequence. Only fields you pass are changed.
+
+    Address the effect with the (layer, index) returned by add_effect, or by
+    inspecting the sequence with inspect_sequence(model_name=...), which reports
+    each effect's layer and index.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension)
+        model_name: Model the effect is on
+        layer: Effect layer index
+        index: Effect's position within that layer
+        effect_name: New effect type, if changing it
+        start_time_ms: New start time in milliseconds
+        end_time_ms: New end time in milliseconds
+        settings: New effect parameter dict (replaces existing settings)
+        colors: New list of hex colors for the effect's palette
+    """
+    from xlights_mcp.xlights.xsq_editor import update_effect as _update_effect
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    return _update_effect(
+        xsq_path, model_name, layer, index,
+        effect_name=effect_name, start_time_ms=start_time_ms, end_time_ms=end_time_ms,
+        settings=settings, colors=colors,
+    )
+
+
+@mcp.tool()
+def delete_effect(sequence_name: str, model_name: str, layer: int, index: int) -> dict:
+    """Delete an effect from a sequence.
+
+    Address the effect with the (layer, index) reported by inspect_sequence
+    (model_name=...) or returned from add_effect.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension)
+        model_name: Model the effect is on
+        layer: Effect layer index
+        index: Effect's position within that layer
+    """
+    from xlights_mcp.xlights.xsq_editor import delete_effect as _delete_effect
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    return _delete_effect(xsq_path, model_name, layer, index)
+
+
+# ---------------------------------------------------------------------------
+# Live xLights Automation Tools (require a running xLights with xFade on)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def xlights_status(host: str | None = None, port: int | None = None) -> dict:
+    """Check whether a running xLights instance is reachable for live tools.
+
+    render_frame and add_effect_live need xLights running with the xFade
+    automation service enabled (Preferences > xFade).
+
+    Args:
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import get_version, AutomationError
+
+    try:
+        result = get_version(host=host, port=port)
+        return {"reachable": True, "version": result.get("version")}
+    except AutomationError as e:
+        return {"reachable": False, "error": str(e)}
+
+
+@mcp.tool()
+def render_frame(
+    sequence_name: str,
+    time_ms: int,
+    output_path: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a single preview frame of a sequence using a running xLights instance.
+
+    Requires xLights running with the xFade automation service enabled
+    (Preferences > xFade) and ffmpeg on PATH. xLights has no native
+    single-frame export, so this opens and renders the sequence, exports
+    it as a full video via xLights' automation API, then extracts one
+    frame with ffmpeg — it may take a while for long sequences.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension). Opened
+            in xLights if it isn't already.
+        time_ms: Timestamp within the sequence to capture, in milliseconds.
+        output_path: Where to save the PNG frame. Defaults to a file next to
+            the sequence named "<sequence_name>_frame_<time_ms>ms.png".
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import render_frame as _render_frame, AutomationError
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    dest = (
+        Path(output_path).expanduser()
+        if output_path
+        else show_path / f"{sequence_name}_frame_{time_ms}ms.png"
+    )
+
+    try:
+        return _render_frame(
+            sequence_name=xsq_path.name, time_ms=time_ms, output_path=dest,
+            host=host, port=port,
+        )
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def add_effect_live(
+    sequence_name: str,
+    model_name: str,
+    effect_name: str,
+    start_time_ms: int,
+    end_time_ms: int,
+    layer: int = 0,
+    settings: dict[str, str] | None = None,
+    colors: list[str] | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Add an effect via a running xLights instance, with real validation.
+
+    Unlike add_effect (which writes the .xsq XML offline), this opens the
+    sequence in a running xLights instance and adds the effect through its
+    automation API — xLights itself validates the model and effect, and
+    "worked": false in the response means it rejected the request. Requires
+    xFade automation enabled (Preferences > xFade). The sequence is not
+    saved automatically; call save_sequence or save from xLights' UI.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension). Opened
+            in xLights if it isn't already.
+        model_name: Model to place the effect on
+        effect_name: xLights effect type (e.g. "Chase", "Twinkle", "Shockwave")
+        start_time_ms: Effect start time in milliseconds
+        end_time_ms: Effect end time in milliseconds
+        layer: Effect layer index (0 = bottom layer)
+        settings: Optional effect parameter dict (E_SLIDER_..., E_CHECKBOX_..., etc.)
+        colors: Optional list of hex colors (e.g. ["#FF0000", "#00FF00"]) for a new palette
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights import automation_client
+    from xlights_mcp.xlights.xsq_editor import _settings_str
+    from xlights_mcp.xlights.palettes import ColorPalette
+    from xlights_mcp.xlights.automation_client import AutomationError
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    settings_str = _settings_str(settings or {})
+    palette_str = ""
+    if colors:
+        palette_str = ColorPalette(
+            colors=colors, active_colors=list(range(1, len(colors) + 1))
+        ).to_xlights_string()
+
+    try:
+        automation_client.open_sequence(xsq_path.name, host=host, port=port)
+        return automation_client.add_effect(
+            model_name, effect_name,
+            settings=settings_str, palette=palette_str, layer=layer,
+            start_time_ms=start_time_ms, end_time_ms=end_time_ms,
+            host=host, port=port,
+        )
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Audio Analysis Tools
 # ---------------------------------------------------------------------------
 
 
 @mcp.tool()
-def analyze_song(mp3_path: str) -> dict:
+def analyze_song(mp3_path: str, detail: str = "summary") -> dict:
     """Analyze a music file for light show sequencing.
 
     Performs full audio analysis: beat detection, song structure,
@@ -295,6 +566,9 @@ def analyze_song(mp3_path: str) -> dict:
 
     Args:
         mp3_path: Path to the .mp3 file to analyze
+        detail: "summary" (counts and key stats, default) or "full" (every
+            per-frame beat/energy/onset value — large, only request this if
+            you specifically need raw timeseries data)
     """
     from xlights_mcp.audio.analyzer import full_analysis
 
@@ -302,9 +576,12 @@ def analyze_song(mp3_path: str) -> dict:
     if not path.exists():
         return {"error": f"File not found: {path}"}
 
+    if detail not in ("summary", "full"):
+        return {"error": f"Invalid detail '{detail}'. Use: summary, full"}
+
     config = get_config()
     analysis = full_analysis(path, config.audio)
-    return analysis.model_dump()
+    return analysis.model_dump() if detail == "full" else analysis.summary()
 
 
 @mcp.tool()
@@ -655,7 +932,16 @@ def fpp_stop() -> dict:
 
 def main():
     """Run the xLights MCP server."""
-    logging.basicConfig(level=logging.INFO)
+    log_dir = Path.home() / ".xlights-mcp"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(log_dir / "server.log"),
+        ],
+        force=True,
+    )
     logger.info("Starting xLights MCP Server v0.1.0")
 
     # Ensure config is loaded at startup
