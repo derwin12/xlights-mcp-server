@@ -1,9 +1,12 @@
 """Sequence generation engine — orchestrates audio analysis → effect placement → .xsq output.
 
-Architecture: 3-layer approach matching professional sequencing patterns:
-  Layer 0 (background bed): Sustained effects that run the full section — twinkle, color wash, plasma
+Architecture: 3-layer approach matching professional sequencing patterns.
+xLights composites layer 0 on top (foreground) and the highest layer index
+on the bottom (background) — see ISPCComputeUtilities::blendLayers, which
+iterates layers high-to-low with the highest index seeding the base buffer.
+  Layer 2 (background bed): Sustained effects that run the full section — twinkle, color wash, plasma
   Layer 1 (mid-layer motion): Rhythmic/directional effects synced to downbeats — chase, spirals
-  Layer 2 (accent hits): Punchy effects on select beats — shockwave, morph, strobe
+  Layer 0 (accent hits): Punchy effects on select beats — shockwave, morph, strobe
 
 Models are assigned ROLES based on their physical type:
   - House outline/rooflines → bass pulse, slow morphs
@@ -29,7 +32,7 @@ from xlights_mcp.xlights.models import LightModel, ShowConfig
 from xlights_mcp.xlights.palettes import ColorPalette, get_theme_palettes
 from xlights_mcp.xlights.show import load_show_config
 from xlights_mcp.xlights.xsq_writer import (
-    EffectPlacement, SequenceSpec, TimingTrack, TimingTrackLabel, write_xsq,
+    AltAudioTrack, EffectPlacement, SequenceSpec, TimingTrack, TimingTrackLabel, write_xsq,
 )
 
 logger = logging.getLogger(__name__)
@@ -198,7 +201,7 @@ EFFECT_VARIANTS: dict[str, list[dict[str, str]]] = {
 # Model role assignments — what role each model type plays in the show
 # ---------------------------------------------------------------------------
 
-# Background bed effects per model category (Layer 0)
+# Background bed effects per model category (Layer 2 — bottommost in xLights)
 BED_EFFECTS: dict[str, list[str]] = {
     "arch": ["ColorWash_slow", "Twinkle_ambient"],
     "tree": ["Spirals_slow", "Plasma_slow", "ColorWash_cycling"],
@@ -220,7 +223,7 @@ MOTION_EFFECTS: dict[str, list[str]] = {
     "other": ["Chase_from_middle", "ColorWash_fast"],
 }
 
-# Accent effects per model category (Layer 2) — on select beats only
+# Accent effects per model category (Layer 0 — topmost, foreground) — on select beats only
 ACCENT_EFFECTS: dict[str, list[str]] = {
     "arch": ["Morph_quick", "Shockwave_hit"],
     "tree": ["Shockwave_hit", "Meteors_explode"],
@@ -485,10 +488,11 @@ def _generate_auto(
 ) -> dict:
     """Professional-quality automatic sequence generation.
 
-    Uses a 3-layer approach with model group synchronization:
-      Layer 0: Background bed (twinkle, wash) — runs full section
+    Uses a 3-layer approach with model group synchronization (xLights renders
+    layer 0 on top, highest layer index on the bottom):
+      Layer 2: Background bed (twinkle, wash) — runs full section
       Layer 1: Motion (chase, spirals) — synced to bars
-      Layer 2: Accent hits (shockwave, morph) — on select downbeats only
+      Layer 0: Accent hits (shockwave, morph) — on select downbeats only
 
     Grouped models (canes, arches, etc.) get identical effects for synchronization.
     """
@@ -562,7 +566,7 @@ def _generate_auto(
             if stem_data.available:
                 dom_stem = stem_data.dominant_stem(section.start_time, section.end_time)
 
-            # --- LAYER 0: Background bed ---
+            # --- LAYER 2: Background bed ---
             bed_override = sec_config.get("bed_override")
             if bed_override:
                 bed_key = bed_override
@@ -576,7 +580,7 @@ def _generate_auto(
             bed_settings = _get_settings(bed_key)
             for name in model_names:
                 all_effects.append(EffectPlacement(
-                    model_name=name, layer=0,
+                    model_name=name, layer=2,
                     effect_name=_effect_name_from_key(bed_key),
                     start_time_ms=section.start_time_ms,
                     end_time_ms=section.end_time_ms,
@@ -637,7 +641,7 @@ def _generate_auto(
                         ))
                     last_motion_key_per_group[group_seed] = motion_key
 
-            # --- LAYER 2: Accent hits (stem-reactive timing) ---
+            # --- LAYER 0: Accent hits (stem-reactive timing) ---
             if use_accents:
                 # Choose accent effects based on dominant stem
                 stem_accent = STEM_ACCENT_OVERRIDES.get(dom_stem, ["Shockwave_hit"])
@@ -669,7 +673,7 @@ def _generate_auto(
                     accent_pal_idx = (pal_idx + j) % len(palette_pool)
                     for name in model_names:
                         all_effects.append(EffectPlacement(
-                            model_name=name, layer=2,
+                            model_name=name, layer=0,
                             effect_name=_effect_name_from_key(accent_key),
                             start_time_ms=t_ms,
                             end_time_ms=t_ms + accent_dur,
@@ -844,32 +848,8 @@ def _generate_auto(
                     assigned_track_name = assigned_track.track_name
                     logger.info(f"No assignment for '{model_name}', defaulting to '{assigned_track_name}'")
 
-                singing_rng = random.Random(hash(model_name + mp3_path.stem))
-
-                # Layer 0: Section-aware background that illuminates the whole model
-                for sec_idx, section in enumerate(analysis.sections):
-                    is_high = section.energy_level >= HIGH_ENERGY_THRESHOLD
-                    is_low = section.energy_level < LOW_ENERGY_THRESHOLD
-                    pal_idx = sec_idx % len(palette_pool)
-                    palette = palette_pool[pal_idx]
-
-                    if is_high:
-                        bed_key = "Twinkle_dense"
-                    elif is_low:
-                        bed_key = "ColorWash_slow"
-                    else:
-                        bed_key = singing_rng.choice(["Twinkle_ambient", "ColorWash_cycling", "Butterfly_gentle"])
-
-                    bed_settings = _get_settings(bed_key)
-                    all_effects.append(EffectPlacement(
-                        model_name=model_name, layer=0,
-                        effect_name=_effect_name_from_key(bed_key),
-                        start_time_ms=section.start_time_ms,
-                        end_time_ms=section.end_time_ms,
-                        settings=bed_settings, palette=palette,
-                    ))
-
-                # Layer 1: Faces effect with the assigned vocal track
+                # Singing props only need the Faces effect — no background bed
+                # layer underneath. Faces is the sole layer (layer 0).
                 faces_settings = {
                     "E_CHECKBOX_Faces_Outline": "1",
                     "E_CHOICE_Faces_EyeBlinkDuration": "Normal",
@@ -882,7 +862,7 @@ def _generate_auto(
                 }
                 all_effects.append(EffectPlacement(
                     model_name=model_name,
-                    layer=1,
+                    layer=0,
                     effect_name="Faces",
                     start_time_ms=0,
                     end_time_ms=analysis.duration_ms,
@@ -900,6 +880,19 @@ def _generate_auto(
                 generate_for_models([model_name], "custom", model_name)
             logger.info("Lyrics unavailable — singing models treated as regular custom models")
 
+    # Surface separated stems as altAudioTracks so they show in xLights'
+    # waveform view alongside the main track.
+    alt_audio_tracks = []
+    if analysis.stems.available:
+        for shortname, path in (
+            ("Vocals", analysis.stems.vocals),
+            ("Drums", analysis.stems.drums),
+            ("Bass", analysis.stems.bass),
+            ("Other", analysis.stems.other),
+        ):
+            if path:
+                alt_audio_tracks.append(AltAudioTrack(path=path, shortname=shortname))
+
     # Build sequence spec
     spec = SequenceSpec(
         song_title=mp3_path.stem, artist="", album="",
@@ -907,6 +900,7 @@ def _generate_auto(
         duration_ms=analysis.duration_ms, timing_ms=25,
         palettes=all_palettes, effects=all_effects,
         timing_tracks=timing_tracks,
+        alt_audio_tracks=alt_audio_tracks,
     )
 
     # Write (never overwrite existing)

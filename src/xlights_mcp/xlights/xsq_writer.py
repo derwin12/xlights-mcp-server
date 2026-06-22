@@ -41,6 +41,14 @@ class TimingTrack(BaseModel):
     labels: list[list[TimingTrackLabel]] = Field(default_factory=list)  # one list per layer
 
 
+class AltAudioTrack(BaseModel):
+    """A secondary audio track (e.g. a separated stem) shown in xLights'
+    waveform view alongside the main mediaFile."""
+
+    path: str
+    shortname: str = ""
+
+
 class SequenceSpec(BaseModel):
     """Complete specification for generating a sequence."""
 
@@ -53,6 +61,7 @@ class SequenceSpec(BaseModel):
     palettes: list[ColorPalette] = Field(default_factory=list)
     effects: list[EffectPlacement] = Field(default_factory=list)
     timing_tracks: list[TimingTrack] = Field(default_factory=list)
+    alt_audio_tracks: list[AltAudioTrack] = Field(default_factory=list)
 
 
 def write_xsq(
@@ -91,6 +100,12 @@ def write_xsq(
     _add_text_elem(head, "sequenceTiming", f"{spec.timing_ms} ms")
     _add_text_elem(head, "sequenceType", "Media")
     _add_text_elem(head, "mediaFile", spec.media_file)
+    if spec.alt_audio_tracks:
+        alt_tracks = ET.SubElement(head, "altAudioTracks")
+        for track in spec.alt_audio_tracks:
+            track_elem = ET.SubElement(alt_tracks, "track")
+            track_elem.set("shortname", track.shortname)
+            track_elem.text = track.path
     _add_text_elem(head, "sequenceDuration", f"{spec.duration_ms / 1000:.3f}")
     ET.SubElement(head, "imageDir")
 
