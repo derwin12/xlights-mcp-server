@@ -31,6 +31,23 @@ class ModelEffects(BaseModel):
     effects: list[EffectSummary] = Field(default_factory=list)
 
 
+class TimingMark(BaseModel):
+    """A single mark within a timing track."""
+
+    label: str
+    start_time_ms: int
+    end_time_ms: int
+    index: int = 0  # position within the track
+
+
+class TimingTrack(BaseModel):
+    """A timing track (e.g. Beats, Sections, Lyrics) and its marks."""
+
+    name: str
+    mark_count: int = 0
+    marks: list[TimingMark] = Field(default_factory=list)
+
+
 class SequenceSummary(BaseModel):
     """Summary of an .xsq sequence file."""
 
@@ -164,6 +181,50 @@ def read_xsq_palettes(xsq_path: Path) -> list[dict]:
                 key, val = pair.split("=", 1)
                 colors[key.strip()] = val.strip()
         result.append({"index": i, "raw": text, "colors": colors})
+    return result
+
+
+def read_xsq_timing_tracks(xsq_path: Path, track_name: str | None = None) -> list[dict]:
+    """List timing tracks (Beats, Sections, Lyrics, etc.) in an .xsq file.
+
+    Timing tracks are stored as <Element type="timing"> with marks as
+    <Effect label="..." startTime="..." endTime="..."> — unlike model
+    effects, marks have no `name`/`palette`, just a `label`. By default
+    only mark counts are returned; pass `track_name` to get the full list
+    of marks for one track.
+    """
+    tree = ET.parse(xsq_path)
+    root = tree.getroot()
+    element_effects = root.find("ElementEffects")
+    if element_effects is None:
+        return []
+
+    result = []
+    for elem in element_effects:
+        if elem.get("type") != "timing":
+            continue
+        name = elem.get("name", "")
+        include_marks = track_name is not None and name == track_name
+
+        marks = []
+        mark_count = 0
+        for layer in elem:
+            for mark_idx, mark in enumerate(layer):
+                mark_count += 1
+                if include_marks:
+                    marks.append(
+                        TimingMark(
+                            label=mark.get("label", ""),
+                            start_time_ms=int(mark.get("startTime", "0")),
+                            end_time_ms=int(mark.get("endTime", "0")),
+                            index=mark_idx,
+                        )
+                    )
+
+        result.append(
+            TimingTrack(name=name, mark_count=mark_count, marks=marks).model_dump()
+        )
+
     return result
 
 

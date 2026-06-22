@@ -274,6 +274,32 @@ def inspect_sequence(sequence_name: str, model_name: str | None = None) -> dict:
 
 
 @mcp.tool()
+def list_timing_tracks(sequence_name: str, track_name: str | None = None) -> dict:
+    """List timing tracks (Beats, Sections, Lyrics, etc.) in a sequence.
+
+    By default each track only reports its mark count (compact); pass
+    track_name to see the full list of marks (label, start/end time) for
+    one track.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension)
+        track_name: Optional timing track name to drill into its marks
+    """
+    from xlights_mcp.xlights.xsq_reader import read_xsq_timing_tracks
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    return {"timing_tracks": read_xsq_timing_tracks(xsq_path, track_name=track_name)}
+
+
+@mcp.tool()
 def list_effects() -> dict:
     """List all available xLights effects with descriptions.
 
@@ -548,6 +574,40 @@ def add_effect_live(
             start_time_ms=start_time_ms, end_time_ms=end_time_ms,
             host=host, port=port,
         )
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def save_sequence_live(
+    sequence_name: str, host: str | None = None, port: int | None = None
+) -> dict:
+    """Save the currently-open sequence in a running xLights instance.
+
+    Use this after add_effect_live (or other manual edits made in xLights'
+    UI) to persist changes to the .xsq file — add_effect_live deliberately
+    leaves changes unsaved so multiple edits can be batched before saving.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension). Must
+            already be open in xLights (e.g. via add_effect_live or render_frame).
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights import automation_client
+    from xlights_mcp.xlights.automation_client import AutomationError
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    try:
+        return automation_client.save_sequence(seq=xsq_path.name, host=host, port=port)
     except AutomationError as e:
         return {"error": str(e)}
 
