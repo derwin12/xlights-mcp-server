@@ -45,6 +45,12 @@ OUT_FILE       = Path(__file__).parent.parent / "effect_showcase_Fireworks.mp4"
 SHORTS_W       = 720
 SHORTS_H       = 1280
 SHORTS_MIN_S   = 5    # tighter minimum so 7 sections + intro + outro fit under 60 s
+
+# Scale the model export before compositing (1.0 = full size).
+# 0.5 = half width/height = 1/4 area; model is centered in a 640×360 canvas.
+MODEL_DISPLAY_SCALE = 1.0
+MIN_CANVAS_W        = 640   # landscape canvas is at least this wide for readable text
+MIN_CANVAS_H        = 360
 VOICE          = "en-US-AriaNeural"   # edge-tts voice
 FONT_FILE      = "C:/Windows/Fonts/arialbd.ttf"  # PIL font path (forward slashes fine on Windows)
 
@@ -415,6 +421,20 @@ def build_video(
     outro_dur: float,
 ) -> Path:
     vid_w, vid_h = _probe_dimensions(full_video)
+
+    # Build a 16:9 canvas at least MIN_CANVAS_W wide so text has room to breathe.
+    # The model is centered both horizontally and vertically.
+    canvas_w = max(vid_w, (vid_h * 16 // 9), MIN_CANVAS_W)
+    if canvas_w % 2:
+        canvas_w += 1
+    canvas_h = max(vid_h, canvas_w * 9 // 16, MIN_CANVAS_H)
+    if canvas_h % 2:
+        canvas_h += 1
+    pad_x = (canvas_w - vid_w) // 2
+    pad_y = (canvas_h - vid_h) // 2
+    if canvas_w != vid_w or canvas_h != vid_h:
+        print(f"  Canvas: {vid_w}x{vid_h} model -> {canvas_w}x{canvas_h} frame")
+
     section_clips = []
 
     start_s = 0.0
@@ -437,14 +457,19 @@ def build_video(
         pad = max(0.0, sec_dur - narr_dur)
 
         print(f"  Section {i+1}: compositing overlays...")
-        _make_text_overlay(label, subtitle, vid_w, vid_h, overlay_png)
+        _make_text_overlay(label, subtitle, canvas_w, canvas_h, overlay_png)
 
+        # Pad clip to canvas, then overlay text
+        fc = (
+            f"[0:v]pad={canvas_w}:{canvas_h}:{pad_x}:{pad_y}:black[padded];"
+            f"[padded][1:v]overlay=0:0[v];"
+            f"[2:a]apad=pad_dur={pad:.3f}[a]"
+        )
         ffmpeg(
             "-i", str(clip_mp4),
             "-i", str(overlay_png),
             "-i", str(narr_mp3),
-            "-filter_complex",
-            "[0:v][1:v]overlay=0:0[v];[2:a]apad=pad_dur=" + f"{pad:.3f}" + "[a]",
+            "-filter_complex", fc,
             "-map", "[v]", "-map", "[a]",
             "-t", f"{sec_dur:.3f}", "-c:v", "libx264", "-c:a", "aac",
             str(muxed),
@@ -477,7 +502,7 @@ def build_video(
     print(f"Creating intro title card (intro_dur={intro_dur:.1f}s)...")
     intro_sec = max(4.0, intro_dur + 0.5)
     intro_png = tmp / "intro.png"
-    _make_intro_frame(vid_w, vid_h, intro_png)
+    _make_intro_frame(canvas_w, canvas_h, intro_png)
     intro_mp4 = tmp / "intro.mp4"
     pad_intro = max(0.0, intro_sec - intro_dur)
     ffmpeg(
@@ -495,7 +520,7 @@ def build_video(
     print(f"Creating outro card (outro_dur={outro_dur:.1f}s)...")
     outro_sec = max(4.0, outro_dur + 1.0)
     outro_png = tmp / "outro.png"
-    _make_outro_frame(vid_w, vid_h, outro_png)
+    _make_outro_frame(canvas_w, canvas_h, outro_png)
     outro_mp4 = tmp / "outro.mp4"
     pad_outro = max(0.0, outro_sec - outro_dur)
     ffmpeg(
@@ -726,6 +751,36 @@ def main():
         print(f"  Exported video: {vid_dur:.1f}s  (expected ~{expected:.1f}s)")
         if vid_dur < expected * 0.9:
             print(f"  WARNING: video is shorter than expected — last section may be clipped")
+
+        # Upscale tiny model exports (LED matrices are low-res by nature).
+        # Use nearest-neighbour so individual pixels stay crisp squares.
+        raw_w, raw_h = _probe_dimensions(full_video)
+        if max(raw_w, raw_h) < 480:
+            scale = max(4, 480 // max(raw_w, raw_h))
+            up_w  = raw_w * scale + (raw_w * scale) % 2
+            up_h  = raw_h * scale + (raw_h * scale) % 2
+            upscaled = tmp / "preview_upscaled.mp4"
+            print(f"  Upscaling {raw_w}x{raw_h} -> {up_w}x{up_h} (nearest-neighbour x{scale})...")
+            ffmpeg(
+                "-i", str(full_video),
+                "-vf", f"scale={up_w}:{up_h}:flags=neighbor",
+                "-c:v", "libx264", "-an", str(upscaled),
+            )
+            full_video = upscaled
+
+        # Optional: shrink the model display (MODEL_DISPLAY_SCALE < 1.0)
+        if MODEL_DISPLAY_SCALE != 1.0:
+            raw_w2, raw_h2 = _probe_dimensions(full_video)
+            disp_w = int(raw_w2 * MODEL_DISPLAY_SCALE)
+            disp_h = int(raw_h2 * MODEL_DISPLAY_SCALE)
+            disp_w += disp_w % 2
+            disp_h += disp_h % 2
+            display_vid = tmp / "preview_display.mp4"
+            print(f"  Display scale {MODEL_DISPLAY_SCALE}x: {raw_w2}x{raw_h2} -> {disp_w}x{disp_h}...")
+            ffmpeg("-i", str(full_video),
+                   "-vf", f"scale={disp_w}:{disp_h}:flags=neighbor",
+                   "-c:v", "libx264", "-an", str(display_vid))
+            full_video = display_vid
 
         # Pass 4: produce final video
         print("\nPass 4: producing showcase video...")
