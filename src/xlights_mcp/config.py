@@ -42,6 +42,7 @@ class ServerConfig(BaseModel):
     detected_folders: dict[str, str] = Field(default_factory=dict)
     fpp: FPPConfig = Field(default_factory=FPPConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
+    wiki_path: str = ""  # local clone of xLightsSequencer/xLights.wiki
 
     @property
     def active_show_path(self) -> Path | None:

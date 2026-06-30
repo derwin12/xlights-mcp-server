@@ -1265,6 +1265,170 @@ def xlights_annotate_screenshot(
 
 
 # ---------------------------------------------------------------------------
+# Wiki Tools
+# ---------------------------------------------------------------------------
+
+_DEFAULT_WIKI_PATH = "H:/XlightsSourceDir/xLights.wiki"
+
+
+def _wiki() -> "WikiManager":
+    from xlights_mcp.wiki.manager import WikiManager
+    config = get_config()
+    path = config.wiki_path or _DEFAULT_WIKI_PATH
+    return WikiManager(path)
+
+
+@mcp.tool()
+def wiki_set_path(path: str) -> dict:
+    """Set the local path to the cloned xLights wiki repository.
+
+    Args:
+        path: Filesystem path to the cloned wiki (e.g. H:/XlightsSourceDir/xLights.wiki).
+    """
+    config = get_config()
+    config.wiki_path = path
+    save_config(config)
+    return {"status": "ok", "wiki_path": path}
+
+
+@mcp.tool()
+def wiki_list_pages() -> dict:
+    """List all pages currently in the local xLights wiki."""
+    try:
+        return {"pages": _wiki().list_pages()}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def wiki_read_page(page_name: str) -> dict:
+    """Read the markdown content of a wiki page.
+
+    Args:
+        page_name: Page name (e.g. "Arches", "xLights-Manual", "_Sidebar").
+    """
+    try:
+        content = _wiki().read_page(page_name)
+        return {"page": page_name, "content": content, "length": len(content)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def wiki_write_page(page_name: str, content: str) -> dict:
+    """Write (create or overwrite) a wiki page with the given markdown content.
+
+    The page is written locally — call wiki_commit_push to publish it.
+
+    Args:
+        page_name: Page name without extension (e.g. "Preferences", "Effects-Panel").
+        content: Full markdown content for the page.
+    """
+    try:
+        path = _wiki().write_page(page_name, content)
+        return {"status": "ok", "written_path": str(path), "length": len(content)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def wiki_screenshot_to_image(
+    scene: str,
+    image_name: str,
+    region: str = "full",
+) -> dict:
+    """Capture a named xLights scene and save it into the wiki images/ folder.
+
+    Combines xlights_navigate_and_screenshot with wiki image management.
+    Returns the relative markdown image reference string ready to embed in a page.
+
+    Args:
+        scene: Scene name (use xlights_list_scenes to see options).
+        image_name: Filename to use in images/ (e.g. "preferences-dialog.png").
+        region: Named region to capture (default "full").
+    """
+    import tempfile, time as _time
+    from pathlib import Path as _Path
+    from xlights_mcp.xlights.screenshot import (
+        find_xlights_window, capture_region, XLightsNotRunning,
+    )
+    from xlights_mcp.xlights.dialog_nav import SCENES
+    from xlights_mcp.xlights.automation_client import call as automation_call, AutomationError
+
+    try:
+        win = find_xlights_window()
+    except XLightsNotRunning as e:
+        return {"status": "error", "error": str(e)}
+
+    if scene not in SCENES:
+        from xlights_mcp.xlights.dialog_nav import list_scenes
+        return {"status": "error", "error": f"Unknown scene {scene!r}.", "available_scenes": list_scenes()}
+
+    for step in SCENES[scene]:
+        stype = step["type"]
+        if stype == "automation":
+            try:
+                automation_call(step["cmd"], **{k: v for k, v in step.items() if k not in ("type", "cmd")})
+            except AutomationError:
+                pass
+        elif stype == "menu":
+            from xlights_mcp.xlights.dialog_nav import open_menu_path
+            open_menu_path(step["path"])
+        elif stype == "hotkey":
+            from xlights_mcp.xlights.dialog_nav import press_hotkey
+            press_hotkey(*step["keys"])
+        elif stype == "wait":
+            _time.sleep(step.get("seconds", 0.3))
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp_path = _Path(tmp.name)
+
+    try:
+        capture_region(region, tmp_path)
+        wiki = _wiki()
+        rel_path = wiki.save_image(tmp_path, image_name)
+        md = wiki.image_markdown(rel_path, image_name.replace("-", " ").replace(".png", ""))
+        return {"status": "ok", "image_path": rel_path, "markdown": md}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+@mcp.tool()
+def wiki_status() -> dict:
+    """Show git status of the local wiki — which pages have been modified."""
+    try:
+        status = _wiki().git_status()
+        return {"status": "ok", "changes": status or "(clean — nothing modified)"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def wiki_commit_push(message: str) -> dict:
+    """Commit all local wiki changes and push them to GitHub.
+
+    Args:
+        message: Commit message describing what was updated.
+    """
+    try:
+        return _wiki().commit_and_push(message)
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def wiki_pull() -> dict:
+    """Pull latest changes from the remote wiki repository."""
+    try:
+        output = _wiki().pull()
+        return {"status": "ok", "output": output}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
