@@ -511,6 +511,124 @@ def render_frame(
 
 
 @mcp.tool()
+def render_clip(
+    sequence_name: str,
+    start_ms: int,
+    end_ms: int,
+    output_path: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a time-range video clip of a sequence using a running xLights instance.
+
+    Exports the full sequence video then trims it with ffmpeg — xLights has no
+    native time-range export. Requires xFade automation enabled and ffmpeg on PATH.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension).
+        start_ms: Clip start time in milliseconds.
+        end_ms: Clip end time in milliseconds.
+        output_path: Where to save the MP4. Defaults to
+            "<sequence_name>_clip_<start_ms>-<end_ms>ms.mp4" next to the sequence.
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import render_clip as _render_clip, AutomationError
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    dest = (
+        Path(output_path).expanduser()
+        if output_path
+        else show_path / f"{sequence_name}_clip_{start_ms}-{end_ms}ms.mp4"
+    )
+
+    try:
+        return _render_clip(
+            sequence_name=str(xsq_path),
+            start_ms=start_ms,
+            end_ms=end_ms,
+            output_path=dest,
+            host=host,
+            port=port,
+        )
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def get_open_sequence(
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Return info about the sequence currently open in xLights.
+
+    Returns name, full path, media file, duration (ms), and frame time (ms).
+    Returns an error dict if no sequence is open or xLights isn't running.
+
+    Args:
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import get_open_sequence as _get_open_seq, AutomationError
+
+    try:
+        return _get_open_seq(host=host, port=port)
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def clone_model_effects(
+    sequence_name: str,
+    source_model: str,
+    target_model: str,
+    erase_target: bool = False,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Copy all effects from one model onto another in a running xLights instance.
+
+    The sequence is opened if it isn't already. Changes are not saved automatically —
+    call save_sequence_live afterwards to persist.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension).
+        source_model: Model to copy effects from.
+        target_model: Model to copy effects onto.
+        erase_target: If True, clear the target model's existing effects before
+            copying. Defaults to False (effects are merged/overlaid).
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import (
+        open_sequence, clone_model_effects as _clone, AutomationError
+    )
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    try:
+        open_sequence(str(xsq_path), host=host, port=port)
+        return _clone(source_model, target_model, erase_target=erase_target, host=host, port=port)
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
 def add_effect_live(
     sequence_name: str,
     model_name: str,

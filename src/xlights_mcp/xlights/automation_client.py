@@ -211,6 +211,33 @@ def add_effect(
     )
 
 
+def get_open_sequence(*, host: str | None = None, port: int | None = None) -> dict:
+    """Return info about the currently-open sequence, or raise AutomationError if none is open."""
+    return call("getOpenSequence", host=host, port=port)
+
+
+def clone_model_effects(
+    source: str,
+    target: str,
+    *,
+    erase_target: bool = False,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Copy all effects from *source* model onto *target* model.
+
+    Args:
+        source: Name of the model to copy effects from.
+        target: Name of the model to copy effects onto.
+        erase_target: If True, clear the target model's existing effects first.
+    """
+    return call(
+        "cloneModelEffects", host=host, port=port,
+        source=source, target=target,
+        eraseModel="true" if erase_target else "false",
+    )
+
+
 def check_sequence(seq: str, *, host: str | None = None, port: int | None = None) -> dict:
     return call("checkSequence", host=host, port=port, seq=seq.replace("\\", "/"))
 
@@ -259,3 +286,57 @@ def render_frame(
             raise AutomationError(f"ffmpeg failed to extract frame: {result.stderr}")
 
     return {"success": True, "output_path": str(output_path), "time_ms": time_ms}
+
+
+def render_clip(
+    *,
+    sequence_name: str,
+    start_ms: int,
+    end_ms: int,
+    output_path: Path,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a sequence and export a video clip covering start_ms..end_ms.
+
+    Like render_frame, this exports the full sequence video then trims it with
+    ffmpeg — xLights has no native time-range export.
+    """
+    if shutil.which("ffmpeg") is None:
+        raise AutomationError(
+            "ffmpeg not found on PATH. Install ffmpeg to use render_clip."
+        )
+    if end_ms <= start_ms:
+        raise AutomationError(f"end_ms ({end_ms}) must be greater than start_ms ({start_ms})")
+
+    open_sequence(sequence_name, host=host, port=port)
+    render_all(host=host, port=port)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        video_path = Path(tmp) / "preview.mp4"
+        export_video_preview(str(video_path), host=host, port=port)
+
+        start_s = start_ms / 1000.0
+        duration_s = (end_ms - start_ms) / 1000.0
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", f"{start_s:.3f}",
+                "-i", str(video_path),
+                "-t", f"{duration_s:.3f}",
+                "-c", "copy",
+                str(output_path),
+            ],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise AutomationError(f"ffmpeg failed to trim clip: {result.stderr}")
+
+    return {
+        "success": True,
+        "output_path": str(output_path),
+        "start_ms": start_ms,
+        "end_ms": end_ms,
+        "duration_ms": end_ms - start_ms,
+    }
