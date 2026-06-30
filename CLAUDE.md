@@ -84,6 +84,16 @@ Whenever you make a decision, identify a task, note a next step, fact, or blocke
 - `files` lists the files this decision/task relates to (can be empty)
 - Log immediately when the item arises  -  not at session end
 
+## After Adding MCP Tools
+
+Whenever a new `@mcp.tool()` is added to `src/xlights_mcp/server.py`, run:
+
+```
+python scripts/gen_tools_reference.py
+```
+
+This rewrites the Available Tools section in `README.md`. Include the updated README in the same commit as the new tool.
+
 ## Session End
 
 When the user signals they are done (e.g. "bye", "done", "wrap up", "end session"), proactively update `CONTEXT.md` in the project root with:
