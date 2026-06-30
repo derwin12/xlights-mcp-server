@@ -216,6 +216,50 @@ def get_open_sequence(*, host: str | None = None, port: int | None = None) -> di
     return call("getOpenSequence", host=host, port=port)
 
 
+def close_sequence(
+    *,
+    force: bool = False,
+    quiet: bool = True,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Close the currently-open sequence.
+
+    Args:
+        force: Discard unsaved changes without prompting. If False and the
+            sequence has unsaved changes, raises AutomationError (504).
+        quiet: Suppress the error when no sequence is open. Defaults to True.
+    """
+    return call(
+        "closeSequence", host=host, port=port,
+        force="true" if force else "false",
+        quiet="true" if quiet else "false",
+    )
+
+
+def new_sequence(
+    duration_secs: int,
+    *,
+    media_file: str = "",
+    frame_ms: int = 50,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Create a new blank sequence in the running xLights instance.
+
+    Args:
+        duration_secs: Sequence length in seconds.
+        media_file: Optional audio file path. Empty for a silent sequence.
+        frame_ms: Frame time in milliseconds (default 50ms = 20fps).
+    """
+    return call(
+        "newSequence", host=host, port=port,
+        durationSecs=str(duration_secs),
+        mediaFile=media_file or "null",
+        frameMS=str(frame_ms),
+    )
+
+
 def clone_model_effects(
     source: str,
     target: str,
@@ -235,6 +279,36 @@ def clone_model_effects(
         "cloneModelEffects", host=host, port=port,
         source=source, target=target,
         eraseModel="true" if erase_target else "false",
+    )
+
+
+def export_model_with_render(
+    model: str,
+    filename: str,
+    *,
+    format: str = "mp4highquality",
+    highdef: bool = True,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a single model and export it as a video/GIF/sequence file.
+
+    Combines render + export in one call — no separate renderAll needed.
+
+    Args:
+        model: Model name (must exist in the open sequence).
+        filename: Output file path. Extension should match ``format``.
+        format: Export format. Common video options: ``mp4highquality``,
+            ``mp4compressed``, ``mp4uncompressed``, ``gif``.
+            Audio/other: ``eseq``, ``hls``, ``lsp``.
+        highdef: Render at high definition. Defaults to True.
+    """
+    return call(
+        "exportModelWithRender", host=host, port=port, timeout=_RENDER_TIMEOUT,
+        model=model,
+        filename=filename.replace("\\", "/"),
+        format=format,
+        highdef="true" if highdef else "false",
     )
 
 

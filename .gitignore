@@ -18,3 +18,8 @@ Thumbs.db
 .vscode/
 .idea/
 .dual-graph/
+
+# Generated showcase videos
+effect_showcase_*.mp4
+sample.gif
+video_to_gif.py
