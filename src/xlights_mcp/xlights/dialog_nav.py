@@ -100,6 +100,24 @@ SCENES: dict[str, list[dict]] = {
     "main_window": [],
     "sequencer": [],
 
+    # ---- Main tab switching (clicks the tab by position in the toolbar) ----
+    # xLights tabs are the three notebook tabs at the top: Controllers (0),
+    # Layout (1), Sequencer (2). We click them by fractional window position.
+    # These require xLights to be running; a sequence must be open for the
+    # Sequencer tab to show content.
+    "tab_controllers": [
+        {"type": "click_fraction", "x": 0.04, "y": 0.055},
+        {"type": "wait", "seconds": 0.4},
+    ],
+    "tab_layout": [
+        {"type": "click_fraction", "x": 0.10, "y": 0.055},
+        {"type": "wait", "seconds": 0.4},
+    ],
+    "tab_sequencer": [
+        {"type": "click_fraction", "x": 0.16, "y": 0.055},
+        {"type": "wait", "seconds": 0.4},
+    ],
+
     # ---- File menu ----
     "new_sequence_dialog": [
         {"type": "hotkey", "keys": ["ctrl", "n"]},

@@ -161,7 +161,7 @@ class TestSceneRegistry:
             assert isinstance(steps, list), f"Scene {name!r} steps must be a list"
             for step in steps:
                 assert "type" in step, f"Step in {name!r} missing 'type'"
-                assert step["type"] in ("automation", "menu", "hotkey", "wait"), \
+                assert step["type"] in ("automation", "menu", "hotkey", "wait", "click_fraction"), \
                     f"Unknown step type {step['type']!r} in scene {name!r}"
 
         assert list_scenes() == sorted(SCENES)

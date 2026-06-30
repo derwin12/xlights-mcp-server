@@ -1155,6 +1155,9 @@ def xlights_navigate_and_screenshot(
         elif stype == "hotkey":
             from xlights_mcp.xlights.dialog_nav import press_hotkey
             press_hotkey(*step["keys"])
+        elif stype == "click_fraction":
+            from xlights_mcp.xlights.dialog_nav import click_at_fraction
+            click_at_fraction(win.rect, step["x"], step["y"])
         elif stype == "wait":
             time.sleep(step.get("seconds", 0.3))
 
@@ -1377,6 +1380,9 @@ def wiki_screenshot_to_image(
         elif stype == "hotkey":
             from xlights_mcp.xlights.dialog_nav import press_hotkey
             press_hotkey(*step["keys"])
+        elif stype == "click_fraction":
+            from xlights_mcp.xlights.dialog_nav import click_at_fraction
+            click_at_fraction(win.rect, step["x"], step["y"])
         elif stype == "wait":
             _time.sleep(step.get("seconds", 0.3))
 
