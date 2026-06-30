@@ -732,7 +732,7 @@ def create_sequence(
         theme: Optional theme hint (e.g., "christmas", "halloween", "energetic")
         vocal_assignments: Optional mapping of model names to vocal track names.
             Use {"all": "<track_name>"} to assign one track to all singing models,
-            or map individual models like {"Snowman": "Vocals", "Bulb Blue": "Full Mix Vocals"}.
+            or map individual models like {"Snowman": "Vocals"}.
             If omitted and singing models are detected, returns available models and
             tracks so you can prompt the user for assignments.
         show_name: Which show folder to generate the sequence in (e.g., "christmas",
@@ -997,6 +997,271 @@ def fpp_stop() -> dict:
 
     config = get_config()
     return stop_playback(config.fpp)
+
+
+# ---------------------------------------------------------------------------
+# Screenshot / Manual Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def xlights_screenshot(
+    output_path: str,
+    bring_to_front: bool = True,
+) -> dict:
+    """Capture the full xLights application window and save it as a PNG.
+
+    xLights must be running. The window is identified by process name
+    (xLights.exe) so browser tabs or IDE windows with "xLights" in their
+    title are never mistaken for the app.
+
+    Args:
+        output_path: Where to save the PNG (e.g. "screenshots/main_window.png").
+        bring_to_front: Restore and focus the window before capturing (default True).
+
+    Returns:
+        saved_path, window title, and pixel dimensions.
+    """
+    from xlights_mcp.xlights.screenshot import capture_window, XLightsNotRunning
+
+    try:
+        saved = capture_window(output_path, bring_to_front=bring_to_front)
+        return {
+            "status": "ok",
+            "saved_path": str(saved),
+        }
+    except XLightsNotRunning as e:
+        return {"status": "error", "error": str(e)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def xlights_screenshot_region(
+    region: str,
+    output_path: str,
+    bring_to_front: bool = True,
+) -> dict:
+    """Capture a named region of the xLights window and save it as a PNG.
+
+    Available region names: full, sequencer, toolbar, model_list,
+    effects_panel, color_panel.
+
+    Use xlights_list_regions to get the current list.
+
+    Args:
+        region: Named region (e.g. "effects_panel") or a JSON array
+                "[left, top, right, bottom]" of absolute screen coordinates.
+        output_path: Where to save the PNG.
+        bring_to_front: Focus the window before capturing (default True).
+    """
+    import json as _json
+    from xlights_mcp.xlights.screenshot import capture_region, XLightsNotRunning
+
+    try:
+        # Accept either a name or a JSON coordinate array
+        parsed_region: str | tuple[int, int, int, int]
+        try:
+            coords = _json.loads(region)
+            if isinstance(coords, list) and len(coords) == 4:
+                parsed_region = tuple(int(c) for c in coords)  # type: ignore[assignment]
+            else:
+                parsed_region = region
+        except (_json.JSONDecodeError, ValueError):
+            parsed_region = region
+
+        saved = capture_region(parsed_region, output_path, bring_to_front=bring_to_front)
+        return {"status": "ok", "saved_path": str(saved), "region": region}
+    except XLightsNotRunning as e:
+        return {"status": "error", "error": str(e)}
+    except ValueError as e:
+        from xlights_mcp.xlights.screenshot import list_named_regions
+        return {
+            "status": "error",
+            "error": str(e),
+            "available_regions": list_named_regions(),
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def xlights_list_regions() -> dict:
+    """List the named capture regions available for xlights_screenshot_region."""
+    from xlights_mcp.xlights.screenshot import NAMED_REGIONS
+
+    return {
+        "regions": {
+            name: {
+                "description": f"left={lf:.0%} top={tf:.0%} right={rf:.0%} bottom={bf:.0%}"
+            }
+            for name, (lf, tf, rf, bf) in NAMED_REGIONS.items()
+        }
+    }
+
+
+@mcp.tool()
+def xlights_navigate_and_screenshot(
+    scene: str,
+    output_path: str,
+    region: str = "full",
+) -> dict:
+    """Navigate xLights to a named UI state, then capture a screenshot.
+
+    This combines dialog navigation (opening menus / dialogs) with window
+    capture so you can screenshot specific parts of the UI for documentation.
+
+    Use xlights_list_scenes to see available scene names.
+
+    Args:
+        scene: Scene name (e.g. "preferences", "controller_visualizer").
+        output_path: Where to save the PNG.
+        region: Named region to capture after navigation (default "full").
+    """
+    import time
+    from xlights_mcp.xlights.screenshot import (
+        find_xlights_window,
+        capture_region,
+        XLightsNotRunning,
+    )
+    from xlights_mcp.xlights.dialog_nav import SCENES
+    from xlights_mcp.xlights.automation_client import call as automation_call, AutomationError
+
+    try:
+        win = find_xlights_window()
+    except XLightsNotRunning as e:
+        return {"status": "error", "error": str(e)}
+
+    if scene not in SCENES:
+        from xlights_mcp.xlights.dialog_nav import list_scenes
+        return {
+            "status": "error",
+            "error": f"Unknown scene {scene!r}.",
+            "available_scenes": list_scenes(),
+        }
+
+    # Execute the navigation steps
+    steps = SCENES[scene]
+    for step in steps:
+        stype = step["type"]
+        if stype == "automation":
+            try:
+                automation_call(step["cmd"], **{k: v for k, v in step.items() if k not in ("type", "cmd")})
+            except AutomationError:
+                pass  # best-effort; screenshot anyway
+        elif stype == "menu":
+            from xlights_mcp.xlights.dialog_nav import open_menu_path
+            open_menu_path(step["path"])
+        elif stype == "hotkey":
+            from xlights_mcp.xlights.dialog_nav import press_hotkey
+            press_hotkey(*step["keys"])
+        elif stype == "wait":
+            time.sleep(step.get("seconds", 0.3))
+
+    try:
+        saved = capture_region(region, output_path)
+        return {"status": "ok", "saved_path": str(saved), "scene": scene, "region": region}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def xlights_list_scenes() -> dict:
+    """List the named navigation scenes available for xlights_navigate_and_screenshot."""
+    from xlights_mcp.xlights.dialog_nav import SCENES
+
+    return {"scenes": list(SCENES.keys())}
+
+
+@mcp.tool()
+def xlights_annotate_screenshot(
+    input_path: str,
+    output_path: str,
+    annotations: list[dict],
+) -> dict:
+    """Add callout annotations to a screenshot for use in documentation.
+
+    Each annotation in *annotations* is a dict with:
+    - ``type``: ``"arrow"`` | ``"box"`` | ``"label"``
+    - ``x``, ``y``: position in pixels (top-left for box/label, tip for arrow)
+    - ``text``: label text (required for label/arrow)
+    - ``x2``, ``y2``: arrow tail position (required for arrow type)
+    - ``width``, ``height``: box size in pixels (required for box type)
+    - ``color``: hex color string, default ``"#FF0000"``
+
+    Example annotations::
+
+        [
+          {"type": "label", "x": 120, "y": 45, "text": "Open Sequence button"},
+          {"type": "arrow", "x": 200, "y": 80, "x2": 350, "y2": 120, "text": "Effects panel"},
+          {"type": "box", "x": 10, "y": 200, "width": 180, "height": 300, "text": "Model list"}
+        ]
+
+    Args:
+        input_path: Path to the source PNG screenshot.
+        output_path: Where to save the annotated PNG.
+        annotations: List of annotation dicts (see above).
+    """
+    from pathlib import Path as _Path
+    from PIL import Image, ImageDraw, ImageFont
+
+    try:
+        img = Image.open(input_path).convert("RGBA")
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        try:
+            font = ImageFont.truetype("arial.ttf", 14)
+            font_small = ImageFont.truetype("arial.ttf", 12)
+        except OSError:
+            font = ImageFont.load_default()
+            font_small = font
+
+        for ann in annotations:
+            color = ann.get("color", "#FF0000")
+            rgb = tuple(int(color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+            rgba = rgb + (220,)
+            text_rgba = (255, 255, 255, 255)
+
+            atype = ann.get("type", "label")
+            x, y = int(ann.get("x", 0)), int(ann.get("y", 0))
+
+            if atype == "box":
+                w = int(ann.get("width", 100))
+                h = int(ann.get("height", 50))
+                draw.rectangle([x, y, x + w, y + h], outline=rgba, width=3)
+                if ann.get("text"):
+                    draw.rectangle([x, y - 18, x + w, y], fill=rgba)
+                    draw.text((x + 3, y - 16), ann["text"], fill=text_rgba, font=font_small)
+
+            elif atype == "arrow":
+                x2, y2 = int(ann.get("x2", x + 50)), int(ann.get("y2", y + 50))
+                draw.line([x, y, x2, y2], fill=rgba, width=3)
+                # arrowhead
+                import math
+                angle = math.atan2(y - y2, x - x2)
+                for da in (0.4, -0.4):
+                    ax = x + 14 * math.cos(angle + da)
+                    ay = y + 14 * math.sin(angle + da)
+                    draw.line([x, y, ax, ay], fill=rgba, width=3)
+                if ann.get("text"):
+                    draw.rectangle([x2 + 2, y2 - 16, x2 + 2 + len(ann["text"]) * 8, y2 + 2], fill=rgba)
+                    draw.text((x2 + 4, y2 - 14), ann["text"], fill=text_rgba, font=font_small)
+
+            else:  # label
+                text = ann.get("text", "")
+                tw = len(text) * 8 + 8
+                draw.rectangle([x, y, x + tw, y + 20], fill=rgba)
+                draw.text((x + 4, y + 3), text, fill=text_rgba, font=font)
+
+        combined = Image.alpha_composite(img, overlay).convert("RGB")
+        out = _Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        combined.save(str(out), "PNG")
+        return {"status": "ok", "saved_path": str(out), "annotation_count": len(annotations)}
+
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 # ---------------------------------------------------------------------------

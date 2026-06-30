@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__dual-graph__graph_continue",
+      "mcp__dual-graph__graph_read",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-ChildItem *)"
+    ]
+  }
+}
