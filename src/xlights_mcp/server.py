@@ -922,6 +922,193 @@ def preview_plan(mp3_path: str, mode: str = "auto", show_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
+# Beat-Synced Sequence Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def create_beat_effect_sequence(
+    mp3_path: str,
+    sequence_name: str,
+    models: list[str],
+    effect_name: str,
+    effect_settings: str | None = None,
+    colors: list[str] | None = None,
+    beat_stride: int = 2,
+    beat_offset: int = 0,
+    alternating_models: list[str] | None = None,
+    show_name: str | None = None,
+    include_beats_track: bool = True,
+    include_bars_track: bool = True,
+) -> dict:
+    """Create a sequence with a single effect repeated on beat-aligned intervals.
+
+    Analyzes the audio for beats, places the chosen effect on every Nth beat
+    across the given models, and writes a new .xsq. Optionally places the same
+    effect on the interleaved beats for a second group of models (e.g. TreeStars
+    firing on the off-beats while Trees fire on the on-beats).
+
+    Args:
+        mp3_path: Path to the .mp3 file
+        sequence_name: Output filename (without .xsq extension)
+        models: Model names to place the effect on
+        effect_name: xLights effect type (e.g. "Shockwave", "Chase", "Fire")
+        effect_settings: Comma-separated effect parameters from xLights CopyFormat
+            (e.g. "E_SLIDER_Shockwave_End_Radius=96,E_CHECKBOX_Shockwave_Scale=1").
+            C_BUTTON_* / C_CHECKBOX_* palette entries are stripped automatically
+            so you can paste the full CopyFormat string directly.
+        colors: Hex color list for the palette (e.g. ["#ffffff"]). Up to 8 slots;
+            only slot 1 is active by default unless more colors are supplied.
+        beat_stride: Place an effect every N beats. 1=every beat, 2=every other,
+            4=downbeats only. Default 2.
+        beat_offset: Which beat within the stride to start on. 0=first beat of
+            each stride group, 1=second beat, etc. Default 0.
+        alternating_models: Optional second group of models that receive the same
+            effect on the interleaved beats (beat_offset + 1 within the stride).
+            Typical use: Trees on even beats, TreeStars on odd beats.
+        show_name: Which show folder to write into. If omitted and only one show
+            is configured, that show is used automatically.
+        include_beats_track: Add a Beats timing track labeled 1-2-3-4. Default True.
+        include_bars_track: Add a Bars timing track labeled 1, 2, 3... Default True.
+    """
+    import librosa as _librosa
+    from xlights_mcp.audio.beats import detect_beats
+    from xlights_mcp.xlights.xsq_writer import (
+        SequenceSpec, EffectPlacement, TimingTrack, TimingTrackLabel, write_xsq,
+    )
+    from xlights_mcp.xlights.palettes import ColorPalette
+    from xlights_mcp.xlights.models import ShowConfig, LightModel
+
+    path = Path(mp3_path).expanduser()
+    if not path.exists():
+        return {"error": f"File not found: {path}"}
+
+    config = get_config()
+    show_path = _resolve_show(config, show_name)
+    if isinstance(show_path, dict):
+        return show_path
+
+    # --- Parse effect settings (strip palette C_* entries if full CopyFormat pasted) ---
+    parsed_settings: dict[str, str] = {}
+    if effect_settings:
+        for token in effect_settings.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if token.startswith("C_"):
+                continue
+            if "=" in token:
+                k, v = token.split("=", 1)
+                parsed_settings[k.strip()] = v.strip()
+
+    # --- Build palette (all 8 slots populated, active slots = len(colors)) ---
+    defaults = ["#ffffff", "#ff0000", "#00ff00", "#0000ff",
+                "#ffff00", "#000000", "#00ffff", "#ff00ff"]
+    palette_colors = list(colors) if colors else ["#ffffff"]
+    # fill remaining slots with defaults
+    for i in range(len(palette_colors), 8):
+        palette_colors.append(defaults[i])
+    active_slots = list(range(1, (len(colors) if colors else 1) + 1))
+    palette = ColorPalette(colors=palette_colors, active_colors=active_slots)
+
+    # --- Audio duration ---
+    y, sr = _librosa.load(str(path), sr=22050, mono=True)
+    duration_ms = int(len(y) / sr * 1000)
+
+    # --- Beat detection + extrapolation ---
+    beat_map = detect_beats(path)
+    beats_ms = beat_map.beat_times_ms
+    beat_interval_ms = int(60000 / beat_map.tempo)
+    while beats_ms[-1] + beat_interval_ms < duration_ms:
+        beats_ms.append(beats_ms[-1] + beat_interval_ms)
+
+    # --- Helper: build effects for one model group at a given offset ---
+    def _make_effects(model_list: list[str], offset: int) -> list[EffectPlacement]:
+        placements = []
+        indices = list(range(offset, len(beats_ms), beat_stride))
+        for model in model_list:
+            for idx in indices:
+                start_ms = beats_ms[idx]
+                end_ms = (beats_ms[idx + 1] if idx + 1 < len(beats_ms)
+                          else beats_ms[idx] + beat_interval_ms)
+                placements.append(EffectPlacement(
+                    model_name=model,
+                    layer=0,
+                    effect_name=effect_name,
+                    start_time_ms=start_ms,
+                    end_time_ms=end_ms,
+                    settings=parsed_settings,
+                    palette=palette,
+                ))
+        return placements
+
+    effects = _make_effects(models, beat_offset)
+    if alternating_models:
+        alt_offset = (beat_offset + 1) % beat_stride
+        effects += _make_effects(alternating_models, alt_offset)
+
+    # --- Timing tracks ---
+    timing_tracks = []
+
+    if include_beats_track:
+        beat_labels = []
+        for i, t in enumerate(beats_ms):
+            end_ms = beats_ms[i + 1] if i + 1 < len(beats_ms) else t + beat_interval_ms
+            beat_labels.append(TimingTrackLabel(
+                label=str((i % 4) + 1),
+                start_time_ms=t,
+                end_time_ms=end_ms,
+            ))
+        timing_tracks.append(TimingTrack(name="Beats", labels=[beat_labels]))
+
+    if include_bars_track:
+        bar_labels = []
+        for bar_num, beat_idx in enumerate(range(0, len(beats_ms), 4)):
+            start_ms = beats_ms[beat_idx]
+            next_idx = beat_idx + 4
+            end_ms = (beats_ms[next_idx] if next_idx < len(beats_ms)
+                      else beats_ms[-1] + beat_interval_ms)
+            bar_labels.append(TimingTrackLabel(
+                label=str(bar_num + 1),
+                start_time_ms=start_ms,
+                end_time_ms=end_ms,
+            ))
+        timing_tracks.append(TimingTrack(name="Bars", labels=[bar_labels]))
+
+    # --- Show config (minimal — only models used) ---
+    all_models = list(models) + (list(alternating_models) if alternating_models else [])
+    show_config = ShowConfig(
+        show_path=str(show_path),
+        show_name=show_path.name,
+        models=[LightModel(name=m) for m in all_models],
+    )
+
+    spec = SequenceSpec(
+        song_title=path.stem,
+        media_file=str(path),
+        duration_ms=duration_ms,
+        timing_ms=25,
+        effects=effects,
+        palettes=[palette],
+        timing_tracks=timing_tracks,
+    )
+
+    output = show_path / f"{sequence_name}.xsq"
+    write_xsq(spec, show_config, output)
+
+    return {
+        "success": True,
+        "sequence": str(output),
+        "tempo_bpm": beat_map.tempo,
+        "beats_detected": len(beat_map.beat_times_ms),
+        "beats_total": len(beats_ms),
+        "bars": len(bar_labels) if include_bars_track else 0,
+        "effects_placed": len(effects),
+        "models": all_models,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Sequence Remapping Tools
 # ---------------------------------------------------------------------------
 
