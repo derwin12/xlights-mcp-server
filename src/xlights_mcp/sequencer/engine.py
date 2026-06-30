@@ -599,6 +599,16 @@ def _generate_auto(
                 else:
                     motion_choices = MOTION_EFFECTS.get(cat, MOTION_EFFECTS["other"])
 
+                # Avoid motion rendering the same effect type as the bed layer
+                # underneath it — otherwise the two layers look redundant
+                # (e.g. Twinkle motion over Twinkle bed).
+                bed_effect_name = _effect_name_from_key(bed_key)
+                distinct_from_bed = [
+                    k for k in motion_choices if _effect_name_from_key(k) != bed_effect_name
+                ]
+                if distinct_from_bed:
+                    motion_choices = distinct_from_bed
+
                 # Avoid repeating the same motion as the previous section
                 last_key = last_motion_key_per_group.get(group_seed)
                 available = [k for k in motion_choices if k != last_key]

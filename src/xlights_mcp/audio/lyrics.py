@@ -204,9 +204,11 @@ def extract_vocal_tracks(
 ) -> list[LyricTrack]:
     """Extract all available vocal timing tracks from an audio file.
 
-    Attempts stem separation (Demucs) to get a clean vocals track,
-    then runs Whisper on each available source. Returns all tracks
-    found so they can be independently assigned to singing models.
+    Attempts stem separation (Demucs) to get a clean vocals track and
+    transcribes it. Only falls back to transcribing the full mix (a second,
+    much noisier Whisper pass) when the isolated stem isn't available or its
+    transcription fails — running both unconditionally would double Whisper's
+    cost for a track that's rarely used.
 
     Returns:
         List of LyricTrack objects (may be empty if no vocals detected).
@@ -235,14 +237,14 @@ def extract_vocal_tracks(
             tracks.append(stem_track)
             logger.info(f"Extracted 'Vocals' track from stem: {len(stem_track.words)} words")
 
-    # Track 2: Transcribe the full mix (captures backing vocals too)
+    # Track 2: only transcribe the full mix as a fallback — skip it when the
+    # isolated-stem transcription above already succeeded.
+    if tracks:
+        return tracks
+
     mix_track = extract_lyrics(audio_path, whisper_model=whisper_model)
     if mix_track.available:
-        # Name depends on whether we already have a stem track
-        if tracks:
-            mix_track.track_name = "Full Mix Vocals"
-        else:
-            mix_track.track_name = "Vocals"
+        mix_track.track_name = "Vocals"
         mix_track.source = "full_mix"
         tracks.append(mix_track)
         logger.info(f"Extracted '{mix_track.track_name}' track from mix: {len(mix_track.words)} words")
