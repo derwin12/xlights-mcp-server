@@ -106,16 +106,16 @@ SCENES: dict[str, list[dict]] = {
     # These require xLights to be running; a sequence must be open for the
     # Sequencer tab to show content.
     "tab_controllers": [
-        {"type": "click_fraction", "x": 0.04, "y": 0.055},
-        {"type": "wait", "seconds": 0.4},
+        {"type": "click_fraction", "x": 0.027, "y": 0.133},
+        {"type": "wait", "seconds": 0.5},
     ],
     "tab_layout": [
-        {"type": "click_fraction", "x": 0.10, "y": 0.055},
-        {"type": "wait", "seconds": 0.4},
+        {"type": "click_fraction", "x": 0.059, "y": 0.133},
+        {"type": "wait", "seconds": 0.5},
     ],
     "tab_sequencer": [
-        {"type": "click_fraction", "x": 0.16, "y": 0.055},
-        {"type": "wait", "seconds": 0.4},
+        {"type": "click_fraction", "x": 0.094, "y": 0.133},
+        {"type": "wait", "seconds": 0.5},
     ],
 
     # ---- File menu ----
