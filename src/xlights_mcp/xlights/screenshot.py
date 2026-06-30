@@ -211,3 +211,72 @@ def capture_region(
 
 def list_named_regions() -> list[str]:
     return sorted(NAMED_REGIONS)
+
+
+def capture_titled_window(
+    title: str,
+    output_path: str | Path,
+    *,
+    bring_to_front: bool = True,
+    padding: int = 0,
+) -> Path:
+    """Find a top-level window whose title *starts with* ``title`` and capture it.
+
+    Useful for floating panels that xLights undocks as separate windows (e.g.
+    "Effect Settings", "Colors", "Layer Blending").
+
+    Raises ``RuntimeError`` if no matching visible window is found.
+    """
+    mss, mss_tools, _, _, win32gui, _ = _imports()
+
+    # Bring the main xLights window to front first so the floating panel is on top
+    if bring_to_front:
+        try:
+            xl_win = find_xlights_window()
+            _bring_to_front(xl_win.hwnd)
+        except Exception:
+            pass
+
+    # Now find the floating panel by title prefix
+    target_hwnd: int | None = None
+    target_rect: WindowRect | None = None
+
+    def _cb(hwnd: int, _: None) -> bool:
+        nonlocal target_hwnd, target_rect
+        if not win32gui.IsWindowVisible(hwnd):
+            return True
+        t = win32gui.GetWindowText(hwnd)
+        if t.startswith(title):
+            r = WindowRect(*win32gui.GetWindowRect(hwnd))
+            if r.width > 10 and r.height > 10:
+                target_hwnd = hwnd
+                target_rect = r
+                return False  # stop enumeration
+        return True
+
+    win32gui.EnumWindows(_cb, None)
+
+    if target_rect is None:
+        raise RuntimeError(
+            f"No visible window with title starting with {title!r}. "
+            "Make sure the panel is undocked and visible."
+        )
+
+    if bring_to_front:
+        time.sleep(0.25)
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    r = target_rect
+    monitor = {
+        "left": r.left - padding,
+        "top": r.top - padding,
+        "width": r.width + 2 * padding,
+        "height": r.height + 2 * padding,
+    }
+    with mss.mss() as sct:
+        img = sct.grab(monitor)
+        mss_tools.to_png(img.rgb, img.size, output=str(output_path))
+
+    return output_path

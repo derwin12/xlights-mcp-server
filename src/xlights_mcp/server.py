@@ -1177,6 +1177,29 @@ def xlights_list_scenes() -> dict:
 
 
 @mcp.tool()
+def xlights_screenshot_floating_panel(
+    panel_title: str,
+    output_path: str,
+) -> dict:
+    """Capture a floating (undocked) xLights panel window by its title.
+
+    Use this to screenshot panels the user has undocked from the main window,
+    such as "Effect Settings", "Colors", "Layer Blending", "Layer Settings".
+
+    Args:
+        panel_title: Title prefix to match (e.g. "Effect Settings").
+        output_path: Where to save the PNG.
+    """
+    from xlights_mcp.xlights.screenshot import capture_titled_window
+
+    try:
+        saved = capture_titled_window(panel_title, output_path)
+        return {"status": "ok", "saved_path": str(saved)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
 def xlights_annotate_screenshot(
     input_path: str,
     output_path: str,

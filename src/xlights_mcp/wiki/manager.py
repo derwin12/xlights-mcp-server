@@ -1,5 +1,11 @@
 """Wiki management for the xLights GitHub wiki repository.
 
+Footer format appended to every page on write:
+
+    ---
+    *Last updated: YYYY-MM-DD*
+
+
 The wiki is a plain git repo of Markdown files cloned locally.
 Images are stored in an `images/` subdirectory and committed alongside
 the Markdown so they can be referenced with relative paths
@@ -9,7 +15,19 @@ the Markdown so they can be referenced with relative paths
 from __future__ import annotations
 
 import subprocess
+from datetime import date
 from pathlib import Path
+
+_FOOTER_MARKER = "\n\n---\n*Last updated:"
+
+
+def _stamp_footer(content: str) -> str:
+    """Remove any existing date footer and append a fresh one for today."""
+    today = date.today().strftime("%Y-%m-%d")
+    # Strip old footer if present
+    if _FOOTER_MARKER in content:
+        content = content[: content.index(_FOOTER_MARKER)]
+    return content.rstrip() + f"{_FOOTER_MARKER} {today}*\n"
 
 
 class WikiError(RuntimeError):
@@ -57,10 +75,9 @@ class WikiManager:
 
     def write_page(self, page_name: str, content: str) -> Path:
         self._check_root()
-        # Normalise to .md
         name = page_name if page_name.endswith(".md") else f"{page_name}.md"
         path = self.root / name
-        path.write_text(content, encoding="utf-8")
+        path.write_text(_stamp_footer(content), encoding="utf-8")
         return path
 
     def _resolve_page(self, page_name: str) -> Path:
