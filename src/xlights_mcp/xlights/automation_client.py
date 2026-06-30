@@ -96,10 +96,13 @@ def open_sequence(
     host: str | None = None,
     port: int | None = None,
 ) -> dict:
+    # Opening a sequence loads audio and may trigger rendering — use the long
+    # timeout so large sequences don't appear to fail when they just need more time.
     return call(
         "loadSequence",
         host=host,
         port=port,
+        timeout=_RENDER_TIMEOUT,
         seq=seq.replace("\\", "/"),
         promptIssues="true" if prompt_issues else "false",
         force="true" if force else "false",
