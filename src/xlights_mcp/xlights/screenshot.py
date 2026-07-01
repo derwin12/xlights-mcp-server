@@ -136,6 +136,11 @@ def _bring_to_front(hwnd: int) -> None:
     time.sleep(0.3)  # let the compositor repaint
 
 
+def bring_to_front(win: "XLightsWindow") -> None:
+    """Public wrapper: restore and focus the given xLights window."""
+    _bring_to_front(win.hwnd)
+
+
 def capture_window(
     output_path: str | Path,
     *,

@@ -46,6 +46,14 @@ SHORTS_W       = 720
 SHORTS_H       = 1280
 SHORTS_MIN_S   = 5    # tighter minimum so 7 sections + intro + outro fit under 60 s
 
+# Branded backdrop for the Reel/Shorts intro card. Already contains the "xLights"
+# logo and "Bonus Gem Series" wordmark, so the generated title only needs to fill
+# the empty box near the top of the image.
+INTRO_BACKDROP = Path(__file__).parent / "assets" / "bonus_gem_intro_backdrop.png"
+# Empty title box in the backdrop's native pixel space (left, top, right, bottom),
+# measured from scripts/assets/bonus_gem_intro_backdrop.png (768x1376).
+INTRO_BACKDROP_BOX = (60, 55, 705, 215)
+
 # Scale the model export before compositing (1.0 = full size).
 # 0.5 = half width/height = 1/4 area; model is centered in a 640×360 canvas.
 MODEL_DISPLAY_SCALE = 1.0
@@ -335,8 +343,65 @@ def _make_text_overlay(label: str, subtitle: str, w: int, h: int, dest: Path) ->
     img.save(dest, "PNG")
 
 
-def _make_intro_frame(w: int, h: int, dest: Path) -> None:
-    """Render a black intro frame with three-line title (opaque RGB PNG for looping)."""
+def _make_intro_frame_backdrop(w: int, h: int, dest: Path, backdrop_path: Path) -> None:
+    """Render the intro frame on the branded backdrop image, with the section
+    title (Effect Showcase / <effect name>) placed inside its empty title box."""
+    bg = Image.open(backdrop_path).convert("RGB")
+    src_w, src_h = bg.size
+    scale = max(w / src_w, h / src_h)
+    new_w, new_h = round(src_w * scale), round(src_h * scale)
+    bg = bg.resize((new_w, new_h), Image.LANCZOS)
+    off_x, off_y = (new_w - w) // 2, (new_h - h) // 2
+    img = bg.crop((off_x, off_y, off_x + w, off_y + h))
+    draw = ImageDraw.Draw(img)
+
+    bx0, by0, bx1, by1 = INTRO_BACKDROP_BOX
+    box_x0, box_y0 = bx0 * scale - off_x, by0 * scale - off_y
+    box_x1, box_y1 = bx1 * scale - off_x, by1 * scale - off_y
+    box_w, box_h = box_x1 - box_x0, box_y1 - box_y0
+
+    def fit_font(text: str, max_w: float, max_h: float) -> ImageFont.FreeTypeFont:
+        size = int(max_h)
+        font = ImageFont.load_default()
+        while size > 6:
+            try:
+                font = ImageFont.truetype(FONT_FILE, size)
+            except OSError:
+                break
+            bbox = draw.textbbox((0, 0), text, font=font)
+            if bbox[2] - bbox[0] <= max_w and bbox[3] - bbox[1] <= max_h:
+                break
+            size -= 2
+        return font
+
+    label_text = TITLE_LINE2.upper()   # "EFFECT SHOWCASE"
+    title_text = TITLE_LINE3.upper()   # effect name, e.g. "SNOWFLAKES"
+    gap = box_h * 0.06
+
+    label_font = fit_font(label_text, box_w * 0.95, box_h * 0.32)
+    title_font = fit_font(title_text, box_w * 0.95, box_h * 0.56)
+
+    lbbox = draw.textbbox((0, 0), label_text, font=label_font)
+    tbbox = draw.textbbox((0, 0), title_text, font=title_font)
+    lw, lh = lbbox[2] - lbbox[0], lbbox[3] - lbbox[1]
+    tw, th = tbbox[2] - tbbox[0], tbbox[3] - tbbox[1]
+
+    start_y = box_y0 + (box_h - (lh + gap + th)) / 2
+    draw.text((box_x0 + (box_w - lw) / 2, start_y - lbbox[1]),
+              label_text, font=label_font, fill=(200, 220, 255))
+    draw.text((box_x0 + (box_w - tw) / 2, start_y + lh + gap - tbbox[1]),
+              title_text, font=title_font, fill=(255, 255, 255))
+
+    img.save(dest, "PNG")
+
+
+def _make_intro_frame(w: int, h: int, dest: Path, backdrop_path: Path | None = None) -> None:
+    """Render the intro frame: on the branded backdrop if provided, else a plain
+    black three-line title (opaque RGB PNG for looping)."""
+    if backdrop_path and backdrop_path.exists():
+        _make_intro_frame_backdrop(w, h, dest, backdrop_path)
+        return
+
     line1_px = max(14, min(h // 13, 32))   # "xLights Bonus Gem" — smallest
     line2_px = max(16, min(h // 11, 38))   # "Effect Showcase"
     line3_px = max(24, min(h //  7, 64))   # effect name — largest, yellow
@@ -628,7 +693,7 @@ def build_video_shorts(
     print(f"Creating intro title card (intro_dur={intro_dur:.1f}s)...")
     intro_sec = max(4.0, intro_dur + 0.5)
     intro_png = tmp / "intro.png"
-    _make_intro_frame(sw, sh, intro_png)
+    _make_intro_frame(sw, sh, intro_png, backdrop_path=INTRO_BACKDROP)
     intro_mp4 = tmp / "intro.mp4"
     pad_intro = max(0.0, intro_sec - intro_dur)
     ffmpeg(

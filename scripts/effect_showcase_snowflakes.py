@@ -18,7 +18,7 @@ import effect_showcase as engine
 # ── Override configuration ─────────────────────────────────────────────────────
 
 engine.EFFECT      = "Snowflakes"
-engine.MODEL               = "TV-Right"
+engine.MODEL               = "TV"
 engine.TITLE_LINE1 = "xLights Bonus Gem"
 engine.TITLE_LINE2 = "Effect Showcase"
 engine.TITLE_LINE3 = "Snowflakes"
