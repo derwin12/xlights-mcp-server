@@ -821,6 +821,45 @@ def get_energy_profile(mp3_path: str) -> dict:
     return result.model_dump()
 
 
+@mcp.tool()
+def suggest_palette(mp3_path: str, theme: str | None = None) -> dict:
+    """Suggest a color palette for a song based on its title and audio feel.
+
+    Runs beat and spectrum analysis on the song, classifies its overall energy
+    (tempo, loudness, bass dominance, dynamic range), and ranks the theme's
+    palette pool by how well each palette's energy/warmth tags match. If
+    `theme` isn't given, it's guessed from keywords in the file name.
+
+    Args:
+        mp3_path: Path to the .mp3 file
+        theme: Optional theme override, e.g. "christmas" or "halloween".
+            If omitted, inferred from the file name.
+    """
+    from xlights_mcp.audio.beats import detect_beats
+    from xlights_mcp.audio.spectrum import analyze_spectrum
+    from xlights_mcp.xlights.palettes import suggest_palette as _suggest_palette
+
+    path = Path(mp3_path).expanduser()
+    if not path.exists():
+        return {"error": f"File not found: {path}"}
+
+    beats = detect_beats(path)
+    spectrum = analyze_spectrum(path)
+
+    band_peaks = {b.name: len(b.peak_times) for b in spectrum.bands}
+    total_peaks = sum(band_peaks.values())
+    bass_peak_ratio = (band_peaks.get("bass", 0) / total_peaks) if total_peaks else None
+
+    return _suggest_palette(
+        title=path.stem,
+        theme=theme,
+        tempo=beats.tempo,
+        average_loudness=spectrum.average_loudness,
+        dynamic_range=spectrum.dynamic_range,
+        bass_peak_ratio=bass_peak_ratio,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Sequence Generation Tools
 # ---------------------------------------------------------------------------
