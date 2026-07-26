@@ -146,22 +146,24 @@ def load_model_groups(show_path: Path) -> list[ModelGroup]:
 
     tree = ET.parse(effects_file)
     root = tree.getroot()
-    models_elem = root.find("models")
-    if models_elem is None:
-        return []
 
+    # Older xLights stored <modelGroup> inside <models>; newer versions use a
+    # separate <modelGroups> section — iterate the whole tree to catch both.
     groups = []
-    for m in models_elem:
-        if m.tag == "modelGroup":
-            members_str = m.get("models", "")
-            members = [name.strip() for name in members_str.split(",") if name.strip()]
-            group = ModelGroup(
-                name=m.get("name", ""),
-                members=members,
-                grid_size=m.get("GridSize", ""),
-                layout=m.get("layout", ""),
-            )
-            groups.append(group)
+    seen: set[str] = set()
+    for m in root.iter("modelGroup"):
+        name = m.get("name", "")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        members_str = m.get("models", "")
+        members = [n.strip() for n in members_str.split(",") if n.strip()]
+        groups.append(ModelGroup(
+            name=name,
+            members=members,
+            grid_size=m.get("GridSize", ""),
+            layout=m.get("layout", ""),
+        ))
 
     logger.info(f"Loaded {len(groups)} model groups from {effects_file}")
     return groups

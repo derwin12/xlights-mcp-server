@@ -351,8 +351,12 @@ def _detect_model_groups(
         group_categories: dict[str, str] = {}
         grouped_names: set[str] = set()
 
-        for mg in show_config.model_groups:
-            members = [model_by_name[n] for n in mg.members if n in model_by_name]
+        # Groups can overlap (whole-house groups, spatial halves, sub-part
+        # groups) — each model may only be driven by one group, first claim
+        # wins, smallest (most specific) groups first.
+        for mg in sorted(show_config.model_groups, key=lambda g: len(g.members)):
+            members = [model_by_name[n] for n in mg.members
+                       if n in model_by_name and n not in grouped_names]
             if len(members) >= 2:
                 groups[mg.name] = members
                 grouped_names.update(m.name for m in members)
@@ -400,6 +404,9 @@ def generate_sequence(
     audio_config: AudioConfig | None = None,
     vocal_assignments: dict[str, str] | None = None,
     include_stems: bool = True,
+    template_name: str = "shockwave_beat_show",
+    role_assignments: dict[str, list[str]] | None = None,
+    whole_house_row: str | None = None,
 ) -> dict:
     """Generate a complete xLights sequence from a music file.
 
@@ -412,6 +419,8 @@ def generate_sequence(
             driven by which instrument (drums/bass/vocals/other) dominates
             each section, instead of always falling back to "other". Bounded
             by audio_config.stem_separation_timeout_s.
+        template_name: For mode="template" — which style template from
+            sequencer/templates/ to apply.
     """
     if not show_path or not show_path.exists():
         return {"error": f"Show path not found: {show_path}"}
@@ -433,7 +442,13 @@ def generate_sequence(
     elif mode == "guided":
         return _generate_guided_preview(analysis, show_config)
     elif mode == "template":
-        return {"error": "Template mode not yet implemented. Use 'auto' or 'guided'."}
+        from xlights_mcp.sequencer.template_engine import generate_from_template
+        return generate_from_template(
+            analysis, show_config, mp3_path,
+            template_name=template_name, theme=theme,
+            role_assignments=role_assignments,
+            whole_house_row=whole_house_row,
+        )
     else:
         return {"error": f"Invalid mode: {mode}"}
 

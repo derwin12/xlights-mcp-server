@@ -503,7 +503,7 @@ def render_frame(
 
     try:
         return _render_frame(
-            sequence_name=xsq_path.name, time_ms=time_ms, output_path=dest,
+            sequence_name=str(xsq_path), time_ms=time_ms, output_path=dest,
             host=host, port=port,
         )
     except AutomationError as e:
@@ -685,7 +685,7 @@ def add_effect_live(
         ).to_xlights_string()
 
     try:
-        automation_client.open_sequence(xsq_path.name, host=host, port=port)
+        automation_client.open_sequence(str(xsq_path), host=host, port=port)
         return automation_client.add_effect(
             model_name, effect_name,
             settings=settings_str, palette=palette_str, layer=layer,
@@ -725,7 +725,7 @@ def save_sequence_live(
         return {"error": f"Sequence not found: {xsq_path}"}
 
     try:
-        return automation_client.save_sequence(seq=xsq_path.name, host=host, port=port)
+        return automation_client.save_sequence(seq=str(xsq_path), host=host, port=port)
     except AutomationError as e:
         return {"error": str(e)}
 
@@ -874,6 +874,9 @@ def create_sequence(
     vocal_assignments: dict[str, str] | None = None,
     show_name: str | None = None,
     include_stems: bool = True,
+    template_name: str = "shockwave_beat_show",
+    role_assignments: dict[str, list[str]] | None = None,
+    whole_house_row: str | None = None,
 ) -> dict:
     """Create an xLights sequence from a music file.
 
@@ -882,9 +885,11 @@ def create_sequence(
 
     Args:
         mp3_path: Path to the .mp3 file
-        mode: Generation mode — "auto" (AI picks everything) or "guided"
-              (interactive, previews the plan before writing the file).
-              "template" is listed in xLights' UI but not implemented here yet.
+        mode: Generation mode — "auto" (AI picks everything), "guided"
+              (interactive, previews the plan before writing the file), or
+              "template" (applies a style template extracted from a real
+              human-made sequence: beat-synced pulses, lockstep chases,
+              layered hero props — see template_name).
         palette_hint: Optional color hint (e.g., "red and green", "orange and purple")
         theme: Optional theme hint (e.g., "christmas", "halloween", "energetic")
         vocal_assignments: Optional mapping of model names to vocal track names.
@@ -900,6 +905,16 @@ def create_sequence(
             by which instrument dominates each section, instead of always
             defaulting to "other". Bounded by a timeout so it can't hang;
             falls back to no stems if Demucs isn't installed or times out.
+        template_name: For mode="template" — which style template to apply
+            (JSON files in sequencer/templates/, e.g. "shockwave_beat_show").
+        role_assignments: For mode="template" — the validated mapping of
+            template roles to model/group row names, e.g.
+            {"beat_pulse": ["Group - Stars"], "chase": ["Group - Arches"],
+             "hero_layered": ["Matrix Seeds"]}. If omitted, NO file is written:
+            the proposed mapping is returned so you can review it with the
+            user first, then call again with the approved assignments.
+        whole_house_row: For mode="template" — optional group for
+            whole-display accent hits at section transitions.
     """
     from xlights_mcp.sequencer.engine import generate_sequence
 
@@ -924,8 +939,126 @@ def create_sequence(
         audio_config=config.audio,
         vocal_assignments=vocal_assignments,
         include_stems=include_stems,
+        template_name=template_name,
     )
     return result
+
+
+@mcp.tool()
+def create_base_sequence(mp3_path: str, show_name: str | None = None) -> dict:
+    """Create a base xLights sequence: timing tracks only, no effects.
+
+    Analyzes the audio and writes a .xsq containing just a Beats timing track
+    (contiguous cells numbered 1-2-3-4 by bar position, vendor-style) and a
+    Sections track with boundaries snapped to the beat grid. This is the
+    starting point for building a show up pattern by pattern — see
+    apply_pulse_pattern.
+
+    Args:
+        mp3_path: Path to the .mp3 file
+        show_name: Which show folder to create the sequence in. If omitted
+            and multiple shows exist, returns available shows.
+    """
+    from xlights_mcp.audio.analyzer import full_analysis
+    from xlights_mcp.sequencer.template_engine import create_base_sequence as _create_base
+    from xlights_mcp.xlights.show import load_show_config
+
+    path = Path(mp3_path).expanduser()
+    if not path.exists():
+        return {"error": f"File not found: {path}"}
+
+    config = get_config()
+    show_path = _resolve_show(config, show_name)
+    if isinstance(show_path, dict):
+        return show_path
+
+    show_config = load_show_config(show_path)
+    analysis = full_analysis(path, config.audio, include_stems=False)
+    return _create_base(analysis, show_config, path)
+
+
+@mcp.tool()
+def apply_pulse_pattern(
+    sequence_name: str,
+    on_beat_models: list[str],
+    off_beat_models: list[str],
+    show_name: str | None = None,
+    template_name: str = "shockwave_beat_show",
+    offset_mode: str = "alternate_beats",
+) -> dict:
+    """Apply the star pulse pattern from a style template to a sequence.
+
+    Places the template's Shockwave pulse block on the target rows using the
+    sequence's own Beats timing track as the grid (create one with
+    create_base_sequence first). Settings/palette strings are used verbatim
+    from the template. Edits the .xsq in place with a timestamped backup.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension)
+        on_beat_models: Rows (model or group names) forming the lead pair
+        off_beat_models: Rows forming the answering pair
+        show_name: Which show folder the sequence is in
+        template_name: Style template supplying the Shockwave block
+        offset_mode: Ping-pong timing — "alternate_beats" (lead rows on beats
+            1,3,5..., answer rows on 2,4,6..., every pulse ON a beat),
+            "half_beat" (vendor-literal: every beat + half-beat offset, suits
+            ~90 BPM songs), or "every_beat" (all rows together on every beat).
+    """
+    from xlights_mcp.sequencer.template_engine import apply_pulse_pattern as _apply
+
+    config = get_config()
+    show_path = _resolve_show(config, show_name)
+    if isinstance(show_path, dict):
+        return show_path
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    return _apply(xsq_path, on_beat_models, off_beat_models,
+                  template_name=template_name, offset_mode=offset_mode)
+
+
+@mcp.tool()
+def apply_accent_pulse_pattern(
+    sequence_name: str,
+    models: list[str],
+    show_name: str | None = None,
+    template_name: str = "shockwave_beat_show",
+    subdivision: str = "beat",
+) -> dict:
+    """Apply the Trees-Stars pattern from a style template to a sequence.
+
+    Duplicates the layout measured from the source's Trees Stars group row: a
+    continuous Shockwave pulse with a bigger accent variant on every bar
+    downbeat (where the Beats track label is "1"), plus an Off effect across
+    the whole row on the layer beneath so background group effects can't
+    bleed onto these props. Uses the sequence's own Beats timing track as the
+    grid (create one with create_base_sequence first). Edits the .xsq in
+    place with a timestamped backup.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension)
+        models: Target rows (model or group names), e.g. a tree-stars group
+        show_name: Which show folder the sequence is in
+        template_name: Style template supplying the Shockwave blocks
+        subdivision: "beat" = one pulse per beat with bar accents (suits
+            fast songs); "half_beat" = vendor-literal eighth-note pulsing
+            (~90 BPM feel); "two_beat" = the Snowflakes technique — one
+            full-beat pulse every 2nd beat, no accents, gentle at any tempo
+    """
+    from xlights_mcp.sequencer.template_engine import apply_accent_pulse_pattern as _apply
+
+    config = get_config()
+    show_path = _resolve_show(config, show_name)
+    if isinstance(show_path, dict):
+        return show_path
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    return _apply(xsq_path, models, template_name=template_name, subdivision=subdivision)
 
 
 @mcp.tool()
