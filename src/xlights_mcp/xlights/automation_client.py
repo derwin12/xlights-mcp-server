@@ -109,6 +109,30 @@ def open_sequence(
     )
 
 
+def _same_path(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
+def ensure_sequence_open(seq: str, *, host: str | None = None, port: int | None = None) -> dict:
+    """Open `seq` only if it isn't already the currently-open sequence.
+
+    xLights' loadSequence automation command reloads the sequence from disk
+    unconditionally when called (it never checks whether the requested file
+    is already open) — discarding any unsaved in-memory edits, such as
+    effects added by an earlier add_effect call in the same batch. Callers
+    that may run repeatedly against an already-open sequence (add_effect_live,
+    render_frame, render_clip) must go through this instead of open_sequence
+    directly, or each call clobbers the previous one's unsaved changes.
+    """
+    try:
+        current = get_open_sequence(host=host, port=port)
+    except AutomationError:
+        current = None
+    if current and current.get("fullseq") and _same_path(current["fullseq"], seq):
+        return current
+    return open_sequence(seq, host=host, port=port)
+
+
 def save_sequence(*, seq: str | None = None, host: str | None = None, port: int | None = None) -> dict:
     return call("saveSequence", host=host, port=port, seq=(seq or "").replace("\\", "/"))
 
@@ -339,7 +363,7 @@ def render_frame(
             "ffmpeg not found on PATH. Install ffmpeg to use render_frame."
         )
 
-    open_sequence(sequence_name, host=host, port=port)
+    ensure_sequence_open(sequence_name, host=host, port=port)
     render_all(host=host, port=port)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -383,7 +407,7 @@ def render_clip(
     if end_ms <= start_ms:
         raise AutomationError(f"end_ms ({end_ms}) must be greater than start_ms ({start_ms})")
 
-    open_sequence(sequence_name, host=host, port=port)
+    ensure_sequence_open(sequence_name, host=host, port=port)
     render_all(host=host, port=port)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

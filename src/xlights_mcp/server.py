@@ -685,7 +685,11 @@ def add_effect_live(
         ).to_xlights_string()
 
     try:
-        automation_client.open_sequence(str(xsq_path), host=host, port=port)
+        # Only opens if this sequence isn't already the one open — xLights'
+        # loadSequence reloads from disk unconditionally otherwise, which
+        # would discard effects added by earlier calls in the same batch
+        # before they get saved.
+        automation_client.ensure_sequence_open(str(xsq_path), host=host, port=port)
         return automation_client.add_effect(
             model_name, effect_name,
             settings=settings_str, palette=palette_str, layer=layer,
@@ -725,7 +729,13 @@ def save_sequence_live(
         return {"error": f"Sequence not found: {xsq_path}"}
 
     try:
-        return automation_client.save_sequence(seq=str(xsq_path), host=host, port=port)
+        # Passing seq at all makes xLights' automation API take the
+        # SaveAsSequence() path instead of a plain in-place save — and
+        # SaveAsSequence() re-resolves the path via wxFileName, which mis-parses
+        # our forward-slash paths and saves relative to xLights' cwd instead of
+        # the show folder. The sequence is already open with a known path, so
+        # leave seq empty to get the plain save.
+        return automation_client.save_sequence(host=host, port=port)
     except AutomationError as e:
         return {"error": str(e)}
 
