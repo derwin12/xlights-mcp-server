@@ -438,3 +438,74 @@ def render_clip(
         "end_ms": end_ms,
         "duration_ms": end_ms - start_ms,
     }
+
+
+def render_model_clip(
+    *,
+    sequence_name: str,
+    model_name: str,
+    output_path: Path,
+    format: str = "mp4highquality",
+    highdef: bool = True,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a single model's own effects (isolated from the rest of the house) and export it.
+
+    Uses xLights' exportModelWithRender command directly, so it's just one
+    automation call instead of the render+export+ffmpeg pipeline render_clip
+    needs for the full house.
+    """
+    ensure_sequence_open(sequence_name, host=host, port=port)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    export_model_with_render(
+        model_name, str(output_path), format=format, highdef=highdef,
+        host=host, port=port,
+    )
+
+    return {"success": True, "output_path": str(output_path), "model": model_name}
+
+
+def render_model_frame(
+    *,
+    sequence_name: str,
+    model_name: str,
+    time_ms: int,
+    output_path: Path,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a single model in isolation and extract one PNG frame at time_ms.
+
+    Like render_frame, but scoped to one model via exportModelWithRender
+    instead of the full house preview.
+    """
+    if shutil.which("ffmpeg") is None:
+        raise AutomationError(
+            "ffmpeg not found on PATH. Install ffmpeg to use render_model_frame."
+        )
+
+    ensure_sequence_open(sequence_name, host=host, port=port)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        video_path = Path(tmp) / "model_preview.mp4"
+        export_model_with_render(
+            model_name, str(video_path), format="mp4highquality", highdef=True,
+            host=host, port=port,
+        )
+
+        seconds = time_ms / 1000.0
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", str(video_path),
+                "-ss", f"{seconds:.3f}", "-frames:v", "1",
+                str(output_path),
+            ],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise AutomationError(f"ffmpeg failed to extract frame: {result.stderr}")
+
+    return {"success": True, "output_path": str(output_path), "model": model_name, "time_ms": time_ms}

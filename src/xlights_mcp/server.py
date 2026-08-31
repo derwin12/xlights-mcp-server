@@ -564,6 +564,113 @@ def render_clip(
 
 
 @mcp.tool()
+def render_model_clip(
+    sequence_name: str,
+    model_name: str,
+    output_path: str | None = None,
+    format: str = "mp4highquality",
+    highdef: bool = True,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render one model's own effects, isolated from the rest of the house, and export it.
+
+    Use this to focus on what a single model is doing instead of the full
+    house preview — e.g. checking a Shockwave effect on the Trees model
+    without the rest of the display cluttering the frame. Requires xFade
+    automation enabled (Preferences > xFade).
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension). Opened
+            in xLights if it isn't already.
+        model_name: Model to isolate (must exist in the open sequence).
+        output_path: Where to save the export. Defaults to
+            "<sequence_name>_<model_name>.mp4" next to the sequence.
+        format: Export format. Common video options: "mp4highquality",
+            "mp4compressed", "mp4uncompressed", "gif".
+        highdef: Render at high definition. Defaults to True.
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import render_model_clip as _render_model_clip, AutomationError
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    ext = "gif" if format == "gif" else "mp4"
+    dest = (
+        Path(output_path).expanduser()
+        if output_path
+        else show_path / f"{sequence_name}_{model_name}.{ext}"
+    )
+
+    try:
+        return _render_model_clip(
+            sequence_name=str(xsq_path), model_name=model_name, output_path=dest,
+            format=format, highdef=highdef, host=host, port=port,
+        )
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def render_model_frame(
+    sequence_name: str,
+    model_name: str,
+    time_ms: int,
+    output_path: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> dict:
+    """Render a single PNG frame of one model, isolated from the rest of the house.
+
+    Like render_frame, but scoped to one model so you can inspect exactly
+    what it's doing at a given timestamp without the rest of the house
+    preview in the way. Requires xFade automation enabled and ffmpeg on PATH.
+
+    Args:
+        sequence_name: Name of the sequence (without .xsq extension). Opened
+            in xLights if it isn't already.
+        model_name: Model to isolate (must exist in the open sequence).
+        time_ms: Timestamp within the sequence to capture, in milliseconds.
+        output_path: Where to save the PNG frame. Defaults to a file next to
+            the sequence named "<sequence_name>_<model_name>_frame_<time_ms>ms.png".
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+    """
+    from xlights_mcp.xlights.automation_client import render_model_frame as _render_model_frame, AutomationError
+
+    config = get_config()
+    show_path = config.active_show_path
+    if not show_path:
+        return {"error": "No active show configured"}
+
+    xsq_path = show_path / f"{sequence_name}.xsq"
+    if not xsq_path.exists():
+        return {"error": f"Sequence not found: {xsq_path}"}
+
+    dest = (
+        Path(output_path).expanduser()
+        if output_path
+        else show_path / f"{sequence_name}_{model_name}_frame_{time_ms}ms.png"
+    )
+
+    try:
+        return _render_model_frame(
+            sequence_name=str(xsq_path), model_name=model_name, time_ms=time_ms,
+            output_path=dest, host=host, port=port,
+        )
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
 def get_open_sequence(
     host: str | None = None,
     port: int | None = None,
