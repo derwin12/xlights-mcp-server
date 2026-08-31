@@ -1,38 +1,3 @@
-<!-- dgc-policy-v11 -->
-# Dual-Graph Context Policy
-
-This project uses a local dual-graph MCP server for efficient context retrieval.
-
-## MANDATORY: Adaptive graph_continue rule
-
-**Call `graph_continue` ONLY when you do NOT already know the relevant files.**
-
-### Call `graph_continue` when:
-- This is the first message of a new task / conversation
-- The task shifts to a completely different area of the codebase
-- You need files you haven't read yet in this session
-
-### SKIP `graph_continue` when:
-- You already identified the relevant files earlier in this conversation
-- You are doing follow-up work on files already read (verify, refactor, test, docs, cleanup, commit)
-- The task is pure text (writing a commit message, summarising, explaining)
-
-**If skipping, go directly to `graph_read` on the already-known `file::symbol`.**
-
-## When you DO call graph_continue
-
-1. **If `graph_continue` returns `needs_project=true`**: call `graph_scan` with `pwd`. Do NOT ask the user.
-
-2. **If `graph_continue` returns `skip=true`**: fewer than 5 files  -  read only specifically named files.
-
-3. **Read `recommended_files`** using `graph_read`.
-   - Always use `file::symbol` notation (e.g. `src/auth.ts::handleLogin`)  -  never read whole files.
-   - `recommended_files` entries that already contain `::` must be passed verbatim.
-
-4. **Obey confidence caps:**
-   - `confidence=high` -> Stop. Do NOT grep or explore further.
-   - `confidence=medium` -> `fallback_rg` at most `max_supplementary_greps` times, then `graph_read` at most `max_supplementary_files` more symbols. Stop.
-   - `confidence=low` -> same as medium. Stop.
 
 ## Session State (compact, update after every turn)
 
