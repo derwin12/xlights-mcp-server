@@ -34,6 +34,7 @@ SHIMMER_WINDOW_S = 0.6
 MAX_TILT = 90.0
 PRE_POSITION_MS = 1500  # orient mode: dark head moves to the next beam's pose this long before it
 STEER_TILT = 45.0  # --pan-mode steer: tilt held here (rises only when a wide lean needs it)
+HIDDEN_LENS_MODE = "edge"  # what a hidden lens means: "edge" (head sideways) or "away" (turned from the camera)
 HIDDEN_LENS = 0.12  # share of the beam toward the camera below which the lens counts as hidden
 LENS_FULL = 0.115  # lens fraction (video_head_facing.py) when the lens faces the camera head-on
 STEER_PAN_LIMIT = 60.0  # deg: pan never needs to exceed this
@@ -181,6 +182,14 @@ def hold_pan_when_hidden(pan, tilt, lean, r, hidden=HIDDEN_LENS):
     return pan, tilt
 
 
+def steer_pose(lean):
+    """Tilt held near STEER_TILT with pan steering the beam (rising only for wide leans)."""
+    need = np.degrees(np.arctan(np.tan(np.radians(np.abs(lean))) / np.sin(np.radians(STEER_PAN_LIMIT))))
+    tilt = np.minimum(np.maximum(STEER_TILT, need), MAX_TILT)
+    pan = np.degrees(np.arcsin(np.clip(np.tan(np.radians(lean)) / np.tan(np.radians(tilt)), -1.0, 1.0)))
+    return pan, tilt
+
+
 def pose_from_lean(lean, mode, gain, toward=None):
     """(pan, tilt) arrays in degrees that show the given on-screen lean to a front camera.
 
@@ -199,7 +208,14 @@ def pose_from_lean(lean, mode, gain, toward=None):
         L = np.radians(lean)
         t = np.arcsin(np.sqrt(np.clip(np.sin(L) ** 2 + r ** 2 * np.cos(L) ** 2, 0.0, 1.0)))
         pan = np.degrees(np.arctan2(np.tan(L) * np.cos(t), r))
-        return hold_pan_when_hidden(pan, np.minimum(np.degrees(t), MAX_TILT), lean, r)
+        tilt = np.minimum(np.degrees(t), MAX_TILT)
+        if HIDDEN_LENS_MODE == "away":
+            # Lens hidden = pointing away from the camera, yoke arms still showing. (tilt, pan) -> (-tilt, -pan)
+            # keeps the lean and flips the beam's toward-camera part, with pan near 0 so no sweep and no wrap.
+            hid = r < HIDDEN_LENS
+            sp, st = steer_pose(lean)
+            return np.where(hid, -sp, pan), np.where(hid, -st, tilt)
+        return hold_pan_when_hidden(pan, tilt, lean, r)
     if mode in ("steer", "orient"):
         # Tilt is held near STEER_TILT and pan steers the beam: lean = atan(tan(tilt) * sin(pan)).
         # The yoke arms then show on both sides of the lens, as on a PixelPro-style rig, instead of
@@ -309,6 +325,9 @@ def main():
                          "--steer-tilt and pan steers the beam (heads look like the source's, yoke arms visible). "
                          "steer disables group fans, which are tilt fans at pan 90; orient: pan and tilt from the lean plus "
                          "how much of each head's lens shows (--facing from video_head_facing.py)")
+    ap.add_argument("--hidden", choices=["edge", "away"], default="edge",
+                    help="orient mode: a head with no lens showing is turned sideways (edge: arch, the Doors/Dolly) "
+                         "or away from the camera with its yoke arms showing (away: Fireflies)")
     ap.add_argument("--facing", help="orient mode: JSON from video_head_facing.py (lens visibility per head and frame)")
     ap.add_argument("--steer-tilt", type=float, default=STEER_TILT, help="steer mode: base tilt in deg (default 45)")
     ap.add_argument("--steer-pan-limit", type=float, default=STEER_PAN_LIMIT,
@@ -321,7 +340,7 @@ def main():
     ap.add_argument("--fan-banks", help="heads fanned together, left to right, e.g. 4,4 or 6 or 3,3 (default: 4,4 for 8 "
                                         "heads, otherwise every head in one bank)")
     args = ap.parse_args()
-    globals().update(STEER_TILT=args.steer_tilt, STEER_PAN_LIMIT=args.steer_pan_limit)
+    globals().update(STEER_TILT=args.steer_tilt, STEER_PAN_LIMIT=args.steer_pan_limit, HIDDEN_LENS_MODE=args.hidden)
 
     data = json.load(open(args.beams))
     frames = data["frames"]
