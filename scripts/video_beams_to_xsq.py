@@ -165,7 +165,9 @@ def yoke_to_cos(spread):
     return np.where(spread < 0, np.nan, np.clip((spread - YOKE_ARCH) / (YOKE_ARMS - YOKE_ARCH), 0.0, 1.0))
 
 
-PAN_STATES = np.array(sorted({*np.arange(-90.0, 91.0, 5.0), -2.5, 2.5} - {0.0}))  # candidate pans; 0 is handled apart
+# candidate pans; 0 is handled apart. Out to +-175 (the layout pan range is +-180): a head turning from facing the camera through
+# sideways to facing away keeps rotating the same way (pan 85 -> 135), where a -90..90 range could only flip to pan -80 / tilt -59.
+PAN_STATES = np.array(sorted({*np.arange(-175.0, 176.0, 5.0), -2.5, 2.5} - {0.0}))
 YOKE_ARCH = 3.6  # yoke spread (video_head_facing.py) of a head turned sideways: arms hidden
 YOKE_ARMS = 10.4  # ... and with the arms either side of the head (pan ~0 or 180)
 YOKE_WEIGHT = 1.0  # weight of the |cos pan| match in the pan path
@@ -173,10 +175,14 @@ AWAY_LEAN_FULL = 12.0  # --hidden away: lean (deg) up to which a hidden lens mea
 AWAY_LEAN_EDGE = 30.0  # ... and from which it means turned sideways
 TILT_PRIOR = 0.06  # cost of tilt^2 (fraction of 90 deg squared) in the pan path
 TILT_SOFT_LIMIT = 65.0  # deg: beyond this the tilt cost climbs steeply
+GROUP_WEIGHT = 0.1  # pull of a head's pan toward the group's median pan (per 90 deg squared) while its readings match the group's
+GROUP_LEAN_TOL = 15.0  # deg: lean, and lens share / yoke |cos pan| (GROUP_SHARE_TOL), within which a head counts as doing what the group does
+GROUP_SHARE_TOL = 0.25
+GROUP_MIN_HEADS = 3
 PAN_LAMBDA = 0.04  # cost of a 90 deg pan change, in squared lens-share units: a pan moves only when the lens data clearly asks
 
 
-def viterbi_pose(lean, r, c=None):
+def viterbi_pose(lean, r, c=None, group=None):
     """Per-frame (pan, tilt) from the lean, the lens share r (0..1 toward the camera) and the yoke |cos pan| c, as one smooth path.
 
     c (from the yoke arms, see yoke_to_cos) is the strongest pan cue: arms either side of the head mean pan ~0/180, a hidden
@@ -186,6 +192,7 @@ def viterbi_pose(lean, r, c=None):
     lean fixes the tilt (tan t = tan L / sin p) and so predicts the toward-camera share bc = sin t cos p; the
     state whose bc best matches r wins, but changing pan costs PAN_LAMBDA per 90 deg, so noise in r around the
     hidden threshold cannot flip the head between two poses (a flip is a 180 deg swing the motors cannot follow).
+    group = (pan array, weight array) pulls the path toward the other heads' median pan where they are doing the same thing.
     A hidden lens means bc ~ 0 (head sideways; HIDDEN_LENS_MODE "edge") or bc <= 0 (turned away; "away").
     """
     n, K = len(lean), len(PAN_STATES)
@@ -224,6 +231,10 @@ def viterbi_pose(lean, r, c=None):
     # fast motors, visibly wrong; without this the smooth-pan cost makes a steep lean from pan ~0 with tilt ~-85.
     ta = np.abs(t) / (np.pi / 2)
     D = D + 10.0 * (np.abs(t) > np.radians(MAX_TILT - 1.0)) + 1e-3 * ta + TILT_PRIOR * ta ** 2         + 0.5 * np.maximum(np.abs(np.degrees(t)) - TILT_SOFT_LIMIT, 0.0) ** 2 / 15.0 ** 2
+    if group is not None:
+        gp, gw = group
+        gp = np.nan_to_num(np.asarray(gp, float))[:, None]
+        D = D + GROUP_WEIGHT * np.asarray(gw, float)[:, None] * ((pans[None, :] - gp) / 90.0) ** 2
     D[:, -1] += 10.0 * (np.abs(np.degrees(L)) > 2.0)  # pan 0 cannot lean
     trans = PAN_LAMBDA * np.abs(pans[:, None] - pans[None, :]) / 90.0
     cost, back = D[0].copy(), np.zeros((n, K + 1), dtype=int)
@@ -246,7 +257,7 @@ def steer_pose(lean):
     return pan, tilt
 
 
-def pose_from_lean(lean, mode, gain, toward=None, yoke_cos=None):
+def pose_from_lean(lean, mode, gain, toward=None, yoke_cos=None, group=None):
     """(pan, tilt) arrays in degrees that show the given on-screen lean to a front camera.
 
     toward (orient mode): per-frame 0..1 share of the beam that points at the camera, read from how
@@ -256,7 +267,7 @@ def pose_from_lean(lean, mode, gain, toward=None, yoke_cos=None):
     if mode == "fixed":
         return np.full_like(lean, PAN), lean
     if mode == "orient" and toward is not None:
-        return viterbi_pose(lean, np.clip(toward, 0.0, 1.0), yoke_cos)
+        return viterbi_pose(lean, np.clip(toward, 0.0, 1.0), yoke_cos, group)
     if mode in ("steer", "orient"):
         # Tilt is held near STEER_TILT and pan steers the beam: lean = atan(tan(tilt) * sin(pan)).
         # The yoke arms then show on both sides of the lens, as on a PixelPro-style rig, instead of
@@ -377,6 +388,7 @@ def main():
     ap.add_argument("--tolerance", type=float, default=2.0, help="max angle error (deg) per segment")
     ap.add_argument("--group", default="Moving Heads Group",
                     help="model group holding MH-1..MH-8 (fixtures 1-8): uniform fans become group effects")
+    ap.add_argument("--no-group", action="store_true", help="orient mode: do not pull each head's pan toward the group's")
     ap.add_argument("--no-fans", action="store_true", help="skip fan detection; per-head effects only")
     ap.add_argument("--fan-banks", help="heads fanned together, left to right, e.g. 4,4 or 6 or 3,3 (default: 4,4 for 8 "
                                         "heads, otherwise every head in one bank)")
@@ -442,24 +454,52 @@ def main():
         print(f"fans: {len(fans)} spans ({kinds}), {covered / data['fps']:.1f}s of {len(frames) / data['fps']:.1f}s "
               f"-> {sum(len(fp['effects']) for *_, fp in fans)} group effects")
 
+    def run_features(h, r):
+        """(facing-frame index, lens share, yoke |cos pan|) of a run of head h; the last two are None without a facing file."""
+        if facing is None:
+            return None, None, None
+        lens, ffps, yoke = facing
+        idx_f = np.clip(np.round(r["t"] * ffps).astype(int), 0, len(lens) - 1)
+        toward, yoke_cos = median_filter(lens[idx_f, h] / LENS_FULL, 9), None
+        if yoke is not None:  # yoke arms: the direct pan cue; fill unmeasured frames from the last good value
+            yc = yoke[idx_f, h].copy()
+            good = ~np.isnan(yc)
+            if good.any():
+                yc = np.interp(np.arange(len(yc)), np.nonzero(good)[0], yc[good])
+                yoke_cos = median_filter(yc, 9)
+        return idx_f, toward, yoke_cos
+
+    # Heads often do the same move together. A first pass poses every head alone; the median pan of the heads whose
+    # readings (lean, lens, yoke) agree with the group's median then pulls each head's second pass toward it, so a
+    # noisy head follows its neighbours instead of picking the mirror pose.
+    group_pan = group_w = None
+    all_runs = [build_runs(frames, h, refs[h])[0] for h in range(nheads)]
+    if args.pan_mode == "orient" and facing is not None and facing[2] is not None and nheads >= GROUP_MIN_HEADS and not args.no_group:
+        nf = len(facing[0])
+        PAN1, LEAN, SHARE, COS = (np.full((nheads, nf), np.nan) for _ in range(4))
+        for h in range(nheads):
+            for r in all_runs[h]:
+                idx_f, toward, yoke_cos = run_features(h, r)
+                if yoke_cos is None:
+                    continue
+                pan1, _ = pose_from_lean(r["ang"], "orient", args.pan_gain, toward, yoke_cos)
+                PAN1[h, idx_f], LEAN[h, idx_f], SHARE[h, idx_f], COS[h, idx_f] = pan1, r["ang"], toward, yoke_cos
+        lit = (~np.isnan(PAN1)).sum(0) >= GROUP_MIN_HEADS
+        with np.errstate(all="ignore"):
+            med = [np.where(lit, np.nanmedian(M, axis=0), np.nan) for M in (PAN1, LEAN, SHARE, COS)]
+        agree = (np.abs(LEAN - med[1]) <= GROUP_LEAN_TOL) & (np.abs(SHARE - med[2]) <= GROUP_SHARE_TOL) & (np.abs(COS - med[3]) <= GROUP_SHARE_TOL)
+        group_pan, group_w = med[0], np.where(agree & lit, 1.0, 0.0)
+        print(f"group pull: {100 * np.nansum(group_w) / max(np.isfinite(PAN1).sum(), 1):.0f}% of lit head-frames agree with the group")
+
     for h, model in enumerate(models):
         ref = refs[h]
-        runs, _ = build_runs(frames, h, ref)
+        runs = all_runs[h]
         segs = []  # (start_ms, end_ms, pan0, pan1, tilt0, tilt1, hsv, dimmer)
         for r in runs:
             t = r["t"]
-            toward = yoke_cos = None
-            if facing is not None:  # share of the beam toward the camera, from the visible lens; smoothed
-                lens, ffps, yoke = facing
-                idx_f = np.clip(np.round(r["t"] * ffps).astype(int), 0, len(lens) - 1)
-                toward = median_filter(lens[idx_f, h] / LENS_FULL, 9)
-                if yoke is not None:  # yoke arms: the direct pan cue; fill unmeasured frames from the last good value
-                    yc = yoke[idx_f, h].copy()
-                    good = ~np.isnan(yc)
-                    if good.any():
-                        yc = np.interp(np.arange(len(yc)), np.nonzero(good)[0], yc[good])
-                        yoke_cos = median_filter(yc, 9)
-            pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward, yoke_cos)
+            idx_f, toward, yoke_cos = run_features(h, r)  # lens share toward the camera and yoke |cos pan|, smoothed
+            group = (group_pan[idx_f], group_w[h][idx_f]) if group_pan is not None else None
+            pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward, yoke_cos, group)
             pose = np.stack([pan, tilt], axis=1)
             idx = douglas_peucker(t, pose, args.tolerance) if len(t) > 2 else [0, len(t) - 1]
             idx = merge_short_segments(t, idx, MIN_SEG_MS)
