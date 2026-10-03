@@ -159,14 +159,28 @@ def merge_short_segments(t, idx, min_ms):
     return keep
 
 
+def yoke_to_cos(spread):
+    """|cos pan| from the yoke spread (arms ~10 px out = 1, hidden arch ~3.6 = 0); NaN where it was not measurable."""
+    spread = np.asarray(spread, float)
+    return np.where(spread < 0, np.nan, np.clip((spread - YOKE_ARCH) / (YOKE_ARMS - YOKE_ARCH), 0.0, 1.0))
+
+
 PAN_STATES = np.array(sorted({*np.arange(-90.0, 91.0, 5.0), -2.5, 2.5} - {0.0}))  # candidate pans; 0 is handled apart
+YOKE_ARCH = 3.6  # yoke spread (video_head_facing.py) of a head turned sideways: arms hidden
+YOKE_ARMS = 10.4  # ... and with the arms either side of the head (pan ~0 or 180)
+YOKE_WEIGHT = 1.0  # weight of the |cos pan| match in the pan path
+AWAY_LEAN_FULL = 12.0  # --hidden away: lean (deg) up to which a hidden lens means turned fully away
+AWAY_LEAN_EDGE = 30.0  # ... and from which it means turned sideways
 TILT_PRIOR = 0.06  # cost of tilt^2 (fraction of 90 deg squared) in the pan path
 TILT_SOFT_LIMIT = 65.0  # deg: beyond this the tilt cost climbs steeply
 PAN_LAMBDA = 0.04  # cost of a 90 deg pan change, in squared lens-share units: a pan moves only when the lens data clearly asks
 
 
-def viterbi_pose(lean, r):
-    """Per-frame (pan, tilt) from the lean and the lens share r (0..1 toward the camera), as one smooth path.
+def viterbi_pose(lean, r, c=None):
+    """Per-frame (pan, tilt) from the lean, the lens share r (0..1 toward the camera) and the yoke |cos pan| c, as one smooth path.
+
+    c (from the yoke arms, see yoke_to_cos) is the strongest pan cue: arms either side of the head mean pan ~0/180, a hidden
+    arch means pan ~90. With c the hidden-lens heuristics (edge/away) are not needed: a hidden lens just means bc ~ 0.
 
     Beam unit vector (right, toward camera, up) = (sin t sin p, sin t cos p, cos t). For a candidate pan p the
     lean fixes the tilt (tan t = tan L / sin p) and so predicts the toward-camera share bc = sin t cos p; the
@@ -180,16 +194,29 @@ def viterbi_pose(lean, r):
     t = np.arctan(np.tan(L)[:, None] / np.sin(P)[None, :])  # n x K, tilt per candidate pan
     bc = np.sin(t) * np.cos(P)[None, :]
     # extra state: pan 0, only for a vertical beam, where the lean does not fix the tilt (lens share does)
-    away = HIDDEN_LENS_MODE == "away" and (r < HIDDEN_LENS)
-    t0 = np.where(away, -np.radians(STEER_TILT), np.arcsin(np.clip(r, 0.0, 1.0)))
+    use_yoke = c is not None
+    away = (not use_yoke) and HIDDEN_LENS_MODE == "away" and (r < HIDDEN_LENS)
+    # upright (tilt 0) is the natural pose of a hidden-lens head with its arms showing and a vertical beam
+    t0 = np.where(away, -np.radians(STEER_TILT), np.where(use_yoke & (r < HIDDEN_LENS), 0.0, np.arcsin(np.clip(r, 0.0, 1.0))))
     t = np.concatenate([t, t0[:, None]], axis=1)
     bc = np.concatenate([bc, np.sin(t0)[:, None]], axis=1)
     pans = np.concatenate([PAN_STATES, [0.0]])
     vis = r[:, None]
-    if HIDDEN_LENS_MODE == "away":
+    if use_yoke:
         hid = (r < HIDDEN_LENS)[:, None]
-        # hidden: a beam clearly pointing away (bc at or below the steer tilt's -sin 45), else visible: match r
-        D = np.where(hid, np.maximum(bc + np.sin(np.radians(STEER_TILT)), 0.0) ** 2,
+        D = np.where(hid, 0.5 * bc ** 2 + 10 * np.maximum(bc - 0.03, 0.0) ** 2,
+                     (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2)
+        cp = np.abs(np.cos(np.radians(pans)))[None, :]
+        cc = np.asarray(c, float)[:, None]
+        D = D + YOKE_WEIGHT * np.where(np.isnan(cc), 0.0, (cp - cc) ** 2)
+    elif HIDDEN_LENS_MODE == "away":
+        # A hidden lens means turned away (yoke arms showing) for a near-vertical beam, and turned sideways (the arch,
+        # arms hidden) once the lean is steep: the target toward-camera share goes from -sin(steer tilt) to 0 as
+        # |lean| grows from AWAY_LEAN_FULL to AWAY_LEAN_EDGE.
+        blend = np.clip((np.abs(np.degrees(L)) - AWAY_LEAN_FULL) / (AWAY_LEAN_EDGE - AWAY_LEAN_FULL), 0.0, 1.0)
+        target = (-np.sin(np.radians(STEER_TILT)) * (1.0 - blend))[:, None]
+        hid = (r < HIDDEN_LENS)[:, None]
+        D = np.where(hid, (bc - target) ** 2,
                      (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2)
     else:
         D = (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2
@@ -219,7 +246,7 @@ def steer_pose(lean):
     return pan, tilt
 
 
-def pose_from_lean(lean, mode, gain, toward=None):
+def pose_from_lean(lean, mode, gain, toward=None, yoke_cos=None):
     """(pan, tilt) arrays in degrees that show the given on-screen lean to a front camera.
 
     toward (orient mode): per-frame 0..1 share of the beam that points at the camera, read from how
@@ -229,7 +256,7 @@ def pose_from_lean(lean, mode, gain, toward=None):
     if mode == "fixed":
         return np.full_like(lean, PAN), lean
     if mode == "orient" and toward is not None:
-        return viterbi_pose(lean, np.clip(toward, 0.0, 1.0))
+        return viterbi_pose(lean, np.clip(toward, 0.0, 1.0), yoke_cos)
     if mode in ("steer", "orient"):
         # Tilt is held near STEER_TILT and pan steers the beam: lean = atan(tan(tilt) * sin(pan)).
         # The yoke arms then show on both sides of the lens, as on a PixelPro-style rig, instead of
@@ -363,7 +390,10 @@ def main():
         if not args.facing:
             sys.exit("--pan-mode orient needs --facing FILE (python scripts/video_head_facing.py VIDEO OUT.json)")
         fdata = json.load(open(args.facing))
-        facing = (np.array(fdata["lens"]), fdata["fps"])
+        yoke = yoke_to_cos(np.array(fdata["yoke"])) if fdata.get("yoke") else None  # |cos pan| per frame/head
+        if yoke is None:
+            print("note: the facing file has no yoke data; falling back to lens-only pans (re-run video_head_facing.py)")
+        facing = (np.array(fdata["lens"]), fdata["fps"], yoke)
     nheads = len(frames[0]["heads"])
     if args.models:
         models = args.models.split(",")
@@ -418,12 +448,18 @@ def main():
         segs = []  # (start_ms, end_ms, pan0, pan1, tilt0, tilt1, hsv, dimmer)
         for r in runs:
             t = r["t"]
-            toward = None
+            toward = yoke_cos = None
             if facing is not None:  # share of the beam toward the camera, from the visible lens; smoothed
-                lens, ffps = facing
+                lens, ffps, yoke = facing
                 idx_f = np.clip(np.round(r["t"] * ffps).astype(int), 0, len(lens) - 1)
                 toward = median_filter(lens[idx_f, h] / LENS_FULL, 9)
-            pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward)
+                if yoke is not None:  # yoke arms: the direct pan cue; fill unmeasured frames from the last good value
+                    yc = yoke[idx_f, h].copy()
+                    good = ~np.isnan(yc)
+                    if good.any():
+                        yc = np.interp(np.arange(len(yc)), np.nonzero(good)[0], yc[good])
+                        yoke_cos = median_filter(yc, 9)
+            pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward, yoke_cos)
             pose = np.stack([pan, tilt], axis=1)
             idx = douglas_peucker(t, pose, args.tolerance) if len(t) > 2 else [0, len(t) - 1]
             idx = merge_short_segments(t, idx, MIN_SEG_MS)
@@ -463,14 +499,17 @@ def main():
                 if facing is not None and seg[2] is not None and seg[0] - cursor > PRE_POSITION_MS:
                     # orient mode: while dark the head parks the way the source head looks (same lean as the
                     # next beam, turned toward or away from the camera as seen in the gap) ...
-                    lens, ffps = facing
+                    lens, ffps, yoke = facing
                     gi = np.clip(np.round(np.arange(cursor, seg[0], FRAME_MS) / 1000.0 * ffps).astype(int), 0, len(lens) - 1)
                     lean_n = float(np.degrees(np.arctan(np.tan(np.radians(tt)) * np.sin(np.radians(pp)))))
                     r_gap = float(np.median(lens[gi, h])) / LENS_FULL
-                    if r_gap >= HIDDEN_LENS:  # lens shows: turn it toward the camera as in the source
-                        gp, gt = pose_from_lean(np.array([lean_n]), "orient", args.pan_gain, np.array([r_gap]))
+                    c_gap = None
+                    if yoke is not None and not np.all(np.isnan(yoke[gi, h])):
+                        c_gap = np.array([float(np.nanmedian(yoke[gi, h]))])
+                    if r_gap >= HIDDEN_LENS or c_gap is not None:  # the source head shows a lens or a yoke: pose it like that
+                        gp, gt = pose_from_lean(np.array([lean_n]), "orient", args.pan_gain, np.array([r_gap]), c_gap)
                         gpp, gtt = float(gp[0]), float(gt[0])
-                    else:  # hidden: park at the next beam's own pose (same pan side, no sweep)
+                    else:  # nothing readable: park at the next beam's own pose (same pan side, no sweep)
                         gpp, gtt = pp, tt
                     split = seg[0] - PRE_POSITION_MS
                     filled.append((cursor, split, gpp, gpp, gtt, gtt, hsv_gap, DARK_DIMMER, False, False))
