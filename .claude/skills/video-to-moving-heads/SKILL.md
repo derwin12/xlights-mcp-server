@@ -52,8 +52,10 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
    - Other rigs (e.g. the 4K I Knew It, different head mesh): `--pan-mode lean` (or `fixed`), group fans on (`--fan-banks 4,4`).
    - Black-silhouette heads with no lens or yoke to read (I Knew It, Dancing With My Elf: 8 heads, 45 px apart at 1920 wide): skip the facing pass and use
      `--pan-mode lean`. The grey backdrop panel in that video gave phantom beams until `--background --min-score 40 --cover-level 60` was used;
-     heads that are off must show as off in the `--overlay` test before the full run. Approved as is; idea not yet tried: use group effects with
-     fan pan plus fan tilt for the uniform spreads instead of per-head effects (`mh_fan.py` fans are tilt fans at pan 90 only).
+     heads that are off must show as off in the `--overlay` test before the full run. Approved as is. Fan pan + fan tilt was probed on this video
+     (4-head banks, every 10th frame with all 4 lit): tilt fan fits 28%, a fixed-tilt pan fan adds only 6% (mostly degenerate), 66% fit neither, i.e.
+     the heads move independently there, so per-head effects are right. A combined pan+tilt fan has 4 parameters for 4 heads and cannot be
+     validated from lean alone. Not worth building without specific moments to target.
    - `steer` is the cruder version of orient (tilt ~45, pan steers). Fans are tilt fans at pan 90, so steer/orient skip them.
 6. **Build**: `python scripts/video_beams_to_xsq.py beams.json "Name vN" --audio ABSOLUTE_OR_REPO_PATH.mp3 --pan-mode orient --facing facing.json [--hidden away]`.
    `--audio` is written as an absolute existing path (a missing media file makes xLights wait on a prompt and `render_clip` hangs).
