@@ -138,7 +138,7 @@ def main():
             slots_dark[h] = slot_text(heads, c0, f"TiltOffset: {start_off:.2f}", v2x.DARK_DIMMER, False)
     print("\n".join(report))
 
-    plan = pts.Plan()
+    plan = pts.Plan(first=[args.group])
     s_ms, e_ms = v2x.snap(t_on * 1000), v2x.snap(t_off * 1000)
     lead_ms = max(0, s_ms - int(args.lead * 1000))
     plan.add(args.group, "Moving Head", lead_ms, s_ms, group_settings(slots_dark), ["#FFFFFF"])

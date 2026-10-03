@@ -47,6 +47,7 @@ class Plan:
     effects: list = field(default_factory=list)  # (element, sublayer|None, name, start, end, settings, colors)
     tracks: dict = field(default_factory=dict)  # track name -> [(label, start, end)]
     t: int = 0
+    first: list = field(default_factory=list)  # elements listed first in the master view (e.g. a group)
 
     def label(self, track, text, start, end):
         self.tracks.setdefault(track, []).append((text, start, end))
@@ -200,14 +201,15 @@ def write(p, total_ms, out):
     by_el = {}
     for e in p.effects:
         by_el.setdefault(e[0], []).append(e)
+    order = sorted(by_el, key=lambda n: (n not in p.first, n))
     disp = ET.SubElement(root, "DisplayElements")
-    for n in sorted(by_el):
+    for n in order:
         ET.SubElement(disp, "Element", collapsed="0", type="model", name=n, visible="1", active="0")
     for tn in sorted(p.tracks):
         ET.SubElement(disp, "Element", collapsed="0", type="timing", name=tn, visible="1", active="0")
 
     ee = ET.SubElement(root, "ElementEffects")
-    for n in sorted(by_el):
+    for n in order:
         el = ET.SubElement(ee, "Element", type="model", name=n)
         main = ET.SubElement(el, "EffectLayer")
         subs = {}
