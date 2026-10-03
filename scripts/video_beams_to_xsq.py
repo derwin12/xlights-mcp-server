@@ -179,6 +179,9 @@ GROUP_WEIGHT = 0.1  # pull of a head's pan toward the group's median pan (per 90
 GROUP_LEAN_TOL = 15.0  # deg: lean, and lens share / yoke |cos pan| (GROUP_SHARE_TOL), within which a head counts as doing what the group does
 GROUP_SHARE_TOL = 0.25
 GROUP_MIN_HEADS = 3
+PAN_JUMP = 0.5  # cost of a pan change over PAN_JUMP_DEG within one video frame (25 ms): the motors cannot do it, so it is a mirror-pose flip ((p, t) and (p +- 180, -t) show the same lean and lens share)
+PAN_JUMP_DEG = 45.0
+PAN_START_BACK = 0.05  # a run's first frame starts on the front pose unless the data clearly says turned away (the mirror pose is a coin toss otherwise)
 PAN_LAMBDA = 0.04  # cost of a 90 deg pan change, in squared lens-share units: a pan moves only when the lens data clearly asks
 
 
@@ -236,7 +239,9 @@ def viterbi_pose(lean, r, c=None, group=None):
         gp = np.nan_to_num(np.asarray(gp, float))[:, None]
         D = D + GROUP_WEIGHT * np.asarray(gw, float)[:, None] * ((pans[None, :] - gp) / 90.0) ** 2
     D[:, -1] += 10.0 * (np.abs(np.degrees(L)) > 2.0)  # pan 0 cannot lean
-    trans = PAN_LAMBDA * np.abs(pans[:, None] - pans[None, :]) / 90.0
+    dpan = np.abs(pans[:, None] - pans[None, :])
+    trans = PAN_LAMBDA * dpan / 90.0 + PAN_JUMP * (dpan > PAN_JUMP_DEG)
+    D[0] += PAN_START_BACK * (np.abs(pans) > 90.0)
     cost, back = D[0].copy(), np.zeros((n, K + 1), dtype=int)
     for i in range(1, n):
         cand = cost[:, None] + trans
@@ -484,12 +489,17 @@ def main():
                     continue
                 pan1, _ = pose_from_lean(r["ang"], "orient", args.pan_gain, toward, yoke_cos)
                 PAN1[h, idx_f], LEAN[h, idx_f], SHARE[h, idx_f], COS[h, idx_f] = pan1, r["ang"], toward, yoke_cos
-        lit = (~np.isnan(PAN1)).sum(0) >= GROUP_MIN_HEADS
-        with np.errstate(all="ignore"):
-            med = [np.where(lit, np.nanmedian(M, axis=0), np.nan) for M in (PAN1, LEAN, SHARE, COS)]
-        agree = (np.abs(LEAN - med[1]) <= GROUP_LEAN_TOL) & (np.abs(SHARE - med[2]) <= GROUP_SHARE_TOL) & (np.abs(COS - med[3]) <= GROUP_SHARE_TOL)
-        group_pan, group_w = med[0], np.where(agree & lit, 1.0, 0.0)
-        print(f"group pull: {100 * np.nansum(group_w) / max(np.isfinite(PAN1).sum(), 1):.0f}% of lit head-frames agree with the group")
+        # peers of head h at a frame: the other heads whose lean, lens and yoke readings are all within tolerance of h's
+        # own (so the two halves of a symmetric fan never pull on each other); the pull needs GROUP_MIN_HEADS - 1 of them
+        group_pan, group_w = np.full((nheads, nf), np.nan), np.zeros((nheads, nf))
+        for h in range(nheads):
+            peers = np.stack([(np.abs(LEAN[j] - LEAN[h]) <= GROUP_LEAN_TOL) & (np.abs(SHARE[j] - SHARE[h]) <= GROUP_SHARE_TOL)
+                              & (np.abs(COS[j] - COS[h]) <= GROUP_SHARE_TOL) if j != h else np.zeros(nf, bool) for j in range(nheads)])
+            with np.errstate(all="ignore"):
+                med = np.nanmedian(np.where(peers, PAN1, np.nan), axis=0)
+            ok = peers.sum(0) >= GROUP_MIN_HEADS - 1
+            group_pan[h], group_w[h] = np.where(ok, med, np.nan), ok.astype(float)
+        print(f"group pull: {100 * group_w[np.isfinite(PAN1)].mean():.0f}% of lit head-frames have {GROUP_MIN_HEADS - 1}+ peers doing the same")
 
     for h, model in enumerate(models):
         ref = refs[h]
@@ -498,7 +508,7 @@ def main():
         for r in runs:
             t = r["t"]
             idx_f, toward, yoke_cos = run_features(h, r)  # lens share toward the camera and yoke |cos pan|, smoothed
-            group = (group_pan[idx_f], group_w[h][idx_f]) if group_pan is not None else None
+            group = (group_pan[h][idx_f], group_w[h][idx_f]) if group_pan is not None else None
             pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward, yoke_cos, group)
             pose = np.stack([pan, tilt], axis=1)
             idx = douglas_peucker(t, pose, args.tolerance) if len(t) > 2 else [0, len(t) - 1]
