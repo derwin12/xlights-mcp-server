@@ -31,6 +31,7 @@ MIN_SEG_MS = 100
 MAX_BRIDGE_S = 0.2  # longest lone beam dropout (s) treated as detector noise and bridged
 SHIMMER_GAPS = 2  # this many other gaps within SHIMMER_WINDOW_S makes a gap part of a shimmer, not noise
 SHIMMER_WINDOW_S = 0.6
+SHIMMER_MAX_GAP_S = 0.3  # longest gap that can belong to a shimmer
 MAX_TILT = 90.0
 PRE_POSITION_MS = 1500  # orient mode: dark head moves to the next beam's pose this long before it
 STEER_TILT = 45.0  # --pan-mode steer: tilt held here (rises only when a wide lean needs it)
@@ -91,9 +92,10 @@ def build_runs(frames, head, ref):
         if not on[i] and on[i - 1] and on[i + 1] and (
                 (not on[i + 2] and on[i + 3]) or (not on[i - 2] and on[i - 3])):
             strobe[i] = True
-    # Bridge short dropouts. A beam does not go dark for a few frames unless it shimmers, so a lone gap
-    # up to MAX_BRIDGE_S is the detector missing a faint frame. Gaps that repeat (SHIMMER_GAPS within
-    # SHIMMER_WINDOW_S) are a real shimmer and stay; the 1-frame strobe is kept by the dimmer curve instead.
+    # Dropouts. A beam does not go dark for a few frames unless it shimmers, so a lone gap up to MAX_BRIDGE_S is
+    # the detector missing a faint frame and is bridged. Short gaps that repeat (SHIMMER_GAPS others within
+    # SHIMMER_WINDOW_S, each up to SHIMMER_MAX_GAP_S) are a shimmer: the run stays one continuous beam whose dark
+    # frames get zero intensity, so the dimmer curve reproduces the on/off pattern (the 1-frame strobe is the same).
     gaps, i = [], 1
     while i < len(on) - 1:
         if not on[i] and on[i - 1]:
@@ -105,12 +107,15 @@ def build_runs(frames, head, ref):
             i = j
         else:
             i += 1
-    starts = np.array([t[g[0]] for g in gaps])
+    short = [g for g in gaps if t[g[1]] - t[g[0] - 1] <= SHIMMER_MAX_GAP_S + 1e-6]
+    starts = np.array([t[g[0]] for g in short])
     for i, j in gaps:
-        n_frames = j - i
-        near = int((np.abs(starts - t[i]) <= SHIMMER_WINDOW_S).sum()) - 1  # other gaps close by
-        lone = t[j] - t[i - 1] <= MAX_BRIDGE_S + 1e-6 and near < SHIMMER_GAPS
-        if n_frames <= 2 or lone:
+        dur = t[j] - t[i - 1]
+        near = int((np.abs(starts - t[i]) <= SHIMMER_WINDOW_S).sum()) - 1 if dur <= SHIMMER_MAX_GAP_S + 1e-6 else 0
+        shimmer = near >= SHIMMER_GAPS
+        if shimmer:
+            strobe[i:j] = True
+        if j - i <= 2 or shimmer or dur <= MAX_BRIDGE_S + 1e-6:
             for k in range(i, j):
                 w = (k - i + 1) / (j - i + 1)
                 ang[k] = ang[i - 1] * (1 - w) + ang[j] * w
@@ -154,32 +159,51 @@ def merge_short_segments(t, idx, min_ms):
     return keep
 
 
-def hold_pan_when_hidden(pan, tilt, lean, r, hidden=HIDDEN_LENS):
-    """Where the lens is hidden (edge-on, beam sideways) hold one pan side and let tilt change sign.
+PAN_STATES = np.array(sorted({*np.arange(-90.0, 91.0, 5.0), -2.5, 2.5} - {0.0}))  # candidate pans; 0 is handled apart
+PAN_LAMBDA = 0.04  # cost of a 90 deg pan change, in squared lens-share units: a pan moves only when the lens data clearly asks
 
-    Edge-on, pan +90 with tilt = lean and pan -90 with tilt = -lean are the same beam, so a lean that
-    crosses zero (or wobbles around it) needs no pan sweep. The side is taken from the neighbouring
-    frame where the lens shows (so the pan stays continuous with it), else it is +90.
+
+def viterbi_pose(lean, r):
+    """Per-frame (pan, tilt) from the lean and the lens share r (0..1 toward the camera), as one smooth path.
+
+    Beam unit vector (right, toward camera, up) = (sin t sin p, sin t cos p, cos t). For a candidate pan p the
+    lean fixes the tilt (tan t = tan L / sin p) and so predicts the toward-camera share bc = sin t cos p; the
+    state whose bc best matches r wins, but changing pan costs PAN_LAMBDA per 90 deg, so noise in r around the
+    hidden threshold cannot flip the head between two poses (a flip is a 180 deg swing the motors cannot follow).
+    A hidden lens means bc ~ 0 (head sideways; HIDDEN_LENS_MODE "edge") or bc <= 0 (turned away; "away").
     """
-    pan, tilt = pan.copy(), tilt.copy()
-    n, i = len(lean), 0
-    while i < n:
-        if r[i] >= hidden:
-            i += 1
-            continue
-        j = i
-        while j + 1 < n and r[j + 1] < hidden:
-            j += 1
-        if i > 0:
-            side = np.sign(pan[i - 1]) or 1.0
-        elif j + 1 < n:
-            side = np.sign(pan[j + 1]) or 1.0
-        else:
-            side = 1.0  # never a reason to prefer a side: always +90, so separate hidden runs never swing
-        pan[i:j + 1] = side * 90.0
-        tilt[i:j + 1] = np.clip(side * lean[i:j + 1], -MAX_TILT, MAX_TILT)
-        i = j + 1
-    return pan, tilt
+    n, K = len(lean), len(PAN_STATES)
+    L = np.radians(np.clip(lean, -80.0, 80.0))
+    P = np.radians(PAN_STATES)
+    t = np.arctan(np.tan(L)[:, None] / np.sin(P)[None, :])  # n x K, tilt per candidate pan
+    bc = np.sin(t) * np.cos(P)[None, :]
+    # extra state: pan 0, only for a vertical beam, where the lean does not fix the tilt (lens share does)
+    away = HIDDEN_LENS_MODE == "away" and (r < HIDDEN_LENS)
+    t0 = np.where(away, -np.radians(STEER_TILT), np.arcsin(np.clip(r, 0.0, 1.0)))
+    t = np.concatenate([t, t0[:, None]], axis=1)
+    bc = np.concatenate([bc, np.sin(t0)[:, None]], axis=1)
+    pans = np.concatenate([PAN_STATES, [0.0]])
+    vis = r[:, None]
+    if HIDDEN_LENS_MODE == "away":
+        hid = (r < HIDDEN_LENS)[:, None]
+        # hidden: a beam clearly pointing away (bc at or below the steer tilt's -sin 45), else visible: match r
+        D = np.where(hid, np.maximum(bc + np.sin(np.radians(STEER_TILT)), 0.0) ** 2,
+                     (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2)
+    else:
+        D = (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2
+    D = D + 10.0 * (np.abs(t) > np.radians(MAX_TILT - 1.0)) + 1e-3 * np.abs(t) / (np.pi / 2)
+    D[:, -1] += 10.0 * (np.abs(np.degrees(L)) > 2.0)  # pan 0 cannot lean
+    trans = PAN_LAMBDA * np.abs(pans[:, None] - pans[None, :]) / 90.0
+    cost, back = D[0].copy(), np.zeros((n, K + 1), dtype=int)
+    for i in range(1, n):
+        cand = cost[:, None] + trans
+        back[i] = cand.argmin(0)
+        cost = D[i] + cand.min(0)
+    path = np.empty(n, dtype=int)
+    path[-1] = cost.argmin()
+    for i in range(n - 1, 0, -1):
+        path[i - 1] = back[i][path[i]]
+    return pans[path], np.degrees(t[np.arange(n), path])
 
 
 def steer_pose(lean):
@@ -194,28 +218,13 @@ def pose_from_lean(lean, mode, gain, toward=None):
     """(pan, tilt) arrays in degrees that show the given on-screen lean to a front camera.
 
     toward (orient mode): per-frame 0..1 share of the beam that points at the camera, read from how
-    much of the head's lens shows (video_head_facing.py).
+    much of the head's lens shows (video_head_facing.py); see viterbi_pose.
     """
     lean = np.clip(lean, -80.0, 80.0)
     if mode == "fixed":
         return np.full_like(lean, PAN), lean
     if mode == "orient" and toward is not None:
-        # Beam unit vector (right, toward camera, up) = (sin t sin p, sin t cos p, cos t). The lean fixes
-        # right/up = tan L and the lens aspect fixes r = toward camera, so
-        #   sin^2 t = sin^2 L + r^2 cos^2 L   and   p = atan2(tan L cos t, r).
-        # r = 0 (lens edge-on or hidden) gives pan +-90 with tilt = |lean|; r near 1 turns the head at the camera.
-        r = np.clip(toward, 0.0, 1.0)
-        L = np.radians(lean)
-        t = np.arcsin(np.sqrt(np.clip(np.sin(L) ** 2 + r ** 2 * np.cos(L) ** 2, 0.0, 1.0)))
-        pan = np.degrees(np.arctan2(np.tan(L) * np.cos(t), r))
-        tilt = np.minimum(np.degrees(t), MAX_TILT)
-        if HIDDEN_LENS_MODE == "away":
-            # Lens hidden = pointing away from the camera, yoke arms still showing. (tilt, pan) -> (-tilt, -pan)
-            # keeps the lean and flips the beam's toward-camera part, with pan near 0 so no sweep and no wrap.
-            hid = r < HIDDEN_LENS
-            sp, st = steer_pose(lean)
-            return np.where(hid, -sp, pan), np.where(hid, -st, tilt)
-        return hold_pan_when_hidden(pan, tilt, lean, r)
+        return viterbi_pose(lean, np.clip(toward, 0.0, 1.0))
     if mode in ("steer", "orient"):
         # Tilt is held near STEER_TILT and pan steers the beam: lean = atan(tan(tilt) * sin(pan)).
         # The yoke arms then show on both sides of the lens, as on a PixelPro-style rig, instead of

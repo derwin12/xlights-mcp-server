@@ -59,11 +59,21 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
 10. **Wrap up**: save the finals, archive the rest, update `MANIFEST.txt` (and the project memory), commit scripts (not videos).
 
 ## How orient mode works (so you can debug it)
-With r = lens fraction / 0.115 (share of the beam toward the camera) and the measured lean L:
-`sin^2 t = sin^2 L + r^2 cos^2 L`, `pan = atan2(tan L cos t, r)`. r = 0 means the lens is hidden: `edge` holds pan +90 and lets the
-tilt change sign through zero (no 180 deg pan sweeps); `away` uses `(tilt, pan) -> (-tilt, -pan)`, which keeps the lean and points the
-beam away from the camera with the pan near 0. Dark gaps park the head like the source, then move to the next beam's pose for the last
-1.5 s. A dark lens facing the camera is the same gray as a head's back, so colour cannot separate them.
+With r = lens fraction / 0.115 (share of the beam toward the camera) and the measured lean L, a candidate pan p fixes the tilt
+(`tan t = tan L / sin p`) and predicts the toward-camera share `bc = sin t cos p`. `viterbi_pose` picks, per run of lit frames, the pan path
+whose bc best matches r, with a cost for changing pan (`PAN_LAMBDA`), so noise in r near the hidden threshold cannot flip a head between two
+poses (a flip is a 180 deg swing the motors cannot follow; it made beams cross at Bow Wow Wow 51 s). Hidden lens (r < 0.12): `edge` = bc ~ 0
+(head sideways, arch); `away` = bc at or below -sin 45 (turned away, arms showing, pan near 0). Dark gaps park the head like the source,
+then move to the next beam's pose for the last 1.5 s. A dark lens facing the camera is the same gray as a head's back, so colour cannot
+separate them.
+
+## Shimmer and strobe
+The source flickers some beams: 1-frame alternation (Fireflies ~21 s, 20 Hz) and longer patterns (Bow Wow Wow 1:52: 3 frames on, 3 off,
+neighbouring heads in opposite phase). A repeating short gap (>= 2 other gaps within 0.6 s, each <= 0.3 s) keeps the beam as one run with
+zero intensity in the dark frames, and a dense dimmer curve (up to 400 points, sampled on the effect's own frame grid) reproduces it.
+Lone gaps up to 0.2 s are detector dropouts and are bridged. Check shimmer by comparing each head's per-frame on/off pattern with the
+source's (should match 100%). Layering an On effect with Shimmer over the MH effect was tried and does not work on these models: it
+writes every channel, so Brightness kills the beam and Min/Max swing the pan/tilt.
 
 ## Traps seen so far
 - Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
