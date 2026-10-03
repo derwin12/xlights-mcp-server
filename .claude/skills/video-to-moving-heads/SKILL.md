@@ -1,0 +1,74 @@
+---
+name: video-to-moving-heads
+description: Reproduce the moving head (MH) beams of a fixed-camera light show video (YouTube URL or file) as an xLights .xsq on the MH-n models. Use when asked to analyze a show video's moving heads, convert beams to a sequence, match head pans/tilts to a source video, or "try another video".
+---
+
+# Video -> Moving Head sequence
+
+Pipeline (all in `scripts/`, run from the repo root):
+
+```
+fetch_video.py  ->  video_beam_analysis.py  ->  video_head_facing.py  ->  video_beams_to_xsq.py  ->  render + compare
+ (video, mp3)       (beams.json: lean/colour    (facing.json: lens        (.xsq on MH-n and the     (render_clip, then
+                     /intensity per head/frame)   visibility per head)      Moving Heads Group)       look at head bodies)
+```
+
+Keep source videos and analysis JSON in `test_videos/` (git-ignored; `MANIFEST.txt` lists the flags that worked per video).
+Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `archive_beam_work\`, never deleted.
+
+## Prerequisites
+- xLights running with xFade automation: `xlights_status` must say reachable (`render_clip` needs it).
+- `ffmpeg` on PATH. For YouTube: recent yt-dlp (`pip install -U yt-dlp`) **and Node.js** on PATH. Without them a download
+  starts and then 403s partway; `fetch_video.py` already enables Node.
+- The show layout needs `MH-1..MH-8` (DmxMovingHeadAdv) and a "Moving Heads Group". Check the user's preview is zoomed on the
+  head row (render_clip captures the preview exactly as shown; if the zoom changes, head positions in replica frames move).
+
+## Steps
+1. **Get the video**: `python scripts/fetch_video.py URL --audio` (cached in `~/.cache/xlights-mcp/videos`), then copy the mp4/mp3
+   into `test_videos/` with a descriptive name and add a MANIFEST entry. Only download videos the user may use.
+2. **Find the heads** (1280x720 coordinates). Pixel Pro Displays roofline rig (6 heads): `426,180;474,180;522,180;570,180;618,180;666,180`.
+   For a new rig, find a frame where beams are vertical, measure the beam x positions (even spacing), and use those, not eyeballed
+   head positions (hand estimates were off by 3-6 px and dropped beams). Head count != 8 maps to the middle models (6 heads = MH-2..MH-7).
+3. **Window test** a 10-20 s stretch with `--overlay` and look at it before the full run:
+   `python scripts/video_beam_analysis.py VIDEO out.json --heads "..." --background --max-angle 85 --min-score 8 --cover-level 5 --base-slack 9 --base-cover 0 --start S --duration D --overlay ov.mp4`
+   Flags: `--background` for a lit sky; `--max-angle` for near-horizontal beams; `--base-cover 0` when beams fade in away from the
+   lens and heads are well spaced (keep the default 0.75 and `--base-slack 7` in tight layouts like I Knew It, 27 px apart).
+   Then run it for the full video (about 10 min per 4 minutes of video; run in the background and use Monitor).
+4. **Facing pass** (Pixel Pro style heads with a teal lens): `python scripts/video_head_facing.py VIDEO facing.json`.
+5. **Choose the pan mode**. A beam's lean cannot reveal the pan (many pan/tilt pairs lean the same), and the sources never hold a fixed
+   pan. For Pixel Pro videos use `--pan-mode orient --facing facing.json`; the lens visibility fixes the pan.
+   - Heads with no lens showing look like an **arch** with the cap leaning along the beam (no yoke arms): default `--hidden edge`
+     (Doors, Dolly, Bow Wow). They look like a **housing between both yoke arms**: `--hidden away` (Fireflies). Compare a few
+     lens-less heads in the source with probe renders if unsure.
+   - Other rigs (e.g. the 4K I Knew It, different head mesh): `--pan-mode lean` (or `fixed`), group fans on (`--fan-banks 4,4`).
+   - `steer` is the cruder version of orient (tilt ~45, pan steers). Fans are tilt fans at pan 90, so steer/orient skip them.
+6. **Build**: `python scripts/video_beams_to_xsq.py beams.json "Name vN" --audio ABSOLUTE_OR_REPO_PATH.mp3 --pan-mode orient --facing facing.json [--hidden away]`.
+   `--audio` is written as an absolute existing path (a missing media file makes xLights wait on a prompt and `render_clip` hangs).
+   Use a **new sequence name for every revision**: xLights renders a same-named sequence from its stale open copy.
+7. **Render**: `render_clip` with the full range and an `output_path` in the scratchpad.
+8. **Verify** (do all of these, then show the user a side-by-side and open it):
+   - Head bodies at several timestamps: crop the source heads (`scale=1280:720,crop=300:60:390:160`) and the replica heads next to each other.
+     Check lens visible / arch / housing-with-arms and the tilt direction. Pick moments with different facing states (see `facing.json`).
+   - Flicker: count dark effects <= 200 ms in the .xsq (should be near 0), and compare beam turn-offs per head in the beams JSON
+     (gaps <= 0.2 s bridged) with those in the sequence. A short dark gap in a steady beam is a detector dropout, never real, unless the
+     source shimmers (1-frame alternating strobe is kept as a dense dimmer curve).
+   - Pan jumps > 120 deg between consecutive effects should happen almost only while a head is dark.
+   - Media exists and the sequence type is Media.
+9. **Iterate on the user's timestamps.** Typical feedback is "at 1:27 the pans look off": compare that moment's head bodies and the
+   effect list for that head (parse the .xsq EffectDB: effect settings contain `&comma;`, and a regex stopping at `;` truncates the dimmer).
+10. **Wrap up**: save the finals, archive the rest, update `MANIFEST.txt` (and the project memory), commit scripts (not videos).
+
+## How orient mode works (so you can debug it)
+With r = lens fraction / 0.115 (share of the beam toward the camera) and the measured lean L:
+`sin^2 t = sin^2 L + r^2 cos^2 L`, `pan = atan2(tan L cos t, r)`. r = 0 means the lens is hidden: `edge` holds pan +90 and lets the
+tilt change sign through zero (no 180 deg pan sweeps); `away` uses `(tilt, pan) -> (-tilt, -pan)`, which keeps the lean and points the
+beam away from the camera with the pan near 0. Dark gaps park the head like the source, then move to the next beam's pose for the last
+1.5 s. A dark lens facing the camera is the same gray as a head's back, so colour cannot separate them.
+
+## Traps seen so far
+- Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
+- Preview `SlewLimit` is 100 deg/s (preview drawing only, not the DMX values); fast source sweeps (~185 deg/s) lag in the preview.
+  Do not change the layout's SlewLimit without asking.
+- Replica beams start at the lens, which shifts as heads tilt, so measuring replica angles by casting rays from fixed head positions is
+  unreliable in dense fans; judge by eye (head bodies and beams).
+- `git status` shows unrelated files (CLAUDE.md, other scripts): stage only your own.
