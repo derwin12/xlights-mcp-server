@@ -147,14 +147,28 @@ def render_all(
 
 
 def export_video_preview(
-    filename: str, *, host: str | None = None, port: int | None = None
+    filename: str,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+    host: str | None = None,
+    port: int | None = None,
 ) -> dict:
+    """Export the House Preview as an mp4.
+
+    Without width/height xLights uses the House Preview pane's current pixel size, so the output depends on
+    the window. With both, it renders the selected preview at that size regardless of the pane (the selected
+    preview/layout group still decides the camera and framing).
+    """
+    size: dict[str, str] = {}
+    if width and height:
+        size = {"width": str(int(width)), "height": str(int(height))}
     # xLights' JSON request parser mishandles backslashes in Windows paths
     # (e.g. "\Users\" gets corrupted, likely by an extra escape pass on its
     # HTTP layer) — forward slashes work fine on Windows, so always use them.
     return call(
         "exportVideoPreview", host=host, port=port, timeout=_RENDER_TIMEOUT,
-        filename=filename.replace("\\", "/"),
+        filename=filename.replace("\\", "/"), **size,
     )
 
 
@@ -349,6 +363,8 @@ def render_frame(
     sequence_name: str,
     time_ms: int,
     output_path: Path,
+    width: int | None = None,
+    height: int | None = None,
     host: str | None = None,
     port: int | None = None,
 ) -> dict:
@@ -369,7 +385,7 @@ def render_frame(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         video_path = Path(tmp) / "preview.mp4"
-        export_video_preview(str(video_path), host=host, port=port)
+        export_video_preview(str(video_path), width=width, height=height, host=host, port=port)
 
         seconds = time_ms / 1000.0
         result = subprocess.run(
@@ -392,6 +408,8 @@ def render_clip(
     start_ms: int,
     end_ms: int,
     output_path: Path,
+    width: int | None = None,
+    height: int | None = None,
     host: str | None = None,
     port: int | None = None,
 ) -> dict:
@@ -413,7 +431,7 @@ def render_clip(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         video_path = Path(tmp) / "preview.mp4"
-        export_video_preview(str(video_path), host=host, port=port)
+        export_video_preview(str(video_path), width=width, height=height, host=host, port=port)
 
         start_s = start_ms / 1000.0
         duration_s = (end_ms - start_ms) / 1000.0

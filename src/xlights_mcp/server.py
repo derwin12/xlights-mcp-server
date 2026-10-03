@@ -464,6 +464,8 @@ def render_frame(
     sequence_name: str,
     time_ms: int,
     output_path: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
     host: str | None = None,
     port: int | None = None,
 ) -> dict:
@@ -481,6 +483,9 @@ def render_frame(
         time_ms: Timestamp within the sequence to capture, in milliseconds.
         output_path: Where to save the PNG frame. Defaults to a file next to
             the sequence named "<sequence_name>_frame_<time_ms>ms.png".
+        width: With height, the output size in pixels, independent of the House Preview window.
+            Omit both to use the pane's current size. The selected preview still sets the framing.
+        height: See width.
         host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
         port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
     """
@@ -504,7 +509,7 @@ def render_frame(
     try:
         return _render_frame(
             sequence_name=str(xsq_path), time_ms=time_ms, output_path=dest,
-            host=host, port=port,
+            width=width, height=height, host=host, port=port,
         )
     except AutomationError as e:
         return {"error": str(e)}
@@ -516,6 +521,8 @@ def render_clip(
     start_ms: int,
     end_ms: int,
     output_path: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
     host: str | None = None,
     port: int | None = None,
 ) -> dict:
@@ -530,6 +537,9 @@ def render_clip(
         end_ms: Clip end time in milliseconds.
         output_path: Where to save the MP4. Defaults to
             "<sequence_name>_clip_<start_ms>-<end_ms>ms.mp4" next to the sequence.
+        width: With height, the output size in pixels, independent of the House Preview window.
+            Omit both to use the pane's current size. The selected preview still sets the framing.
+        height: See width.
         host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
         port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
     """
@@ -556,6 +566,8 @@ def render_clip(
             start_ms=start_ms,
             end_ms=end_ms,
             output_path=dest,
+            width=width,
+            height=height,
             host=host,
             port=port,
         )

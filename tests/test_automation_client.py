@@ -140,3 +140,24 @@ def test_unconditional_open_sequence_would_lose_earlier_adds(fake_xlights):
     )
 
     assert len(fake_xlights.memory_effects[("Matrix", "1")]) == 1
+
+
+def test_export_video_preview_passes_size_only_when_both_given(monkeypatch):
+    """width/height make the export independent of the House Preview pane size; omitted means pane size."""
+    calls = []
+    bs = chr(92)  # a Windows path separator; written this way to keep the test source free of escapes
+
+    def fake_call(cmd, host=None, port=None, timeout=30.0, **params):
+        calls.append((cmd, params))
+        return {"res": 200}
+
+    monkeypatch.setattr(automation_client, "call", fake_call)
+
+    automation_client.export_video_preview("C:" + bs + "tmp" + bs + "a.mp4")
+    automation_client.export_video_preview("C:/tmp/b.mp4", width=1920, height=1058)
+    automation_client.export_video_preview("C:/tmp/c.mp4", width=1920)  # a lone width is ignored
+
+    assert calls[0][1] == {"filename": "C:/tmp/a.mp4"}  # backslashes still become forward slashes
+    assert calls[1][1] == {"filename": "C:/tmp/b.mp4", "width": "1920", "height": "1058"}
+    assert calls[2][1] == {"filename": "C:/tmp/c.mp4"}
+    assert all(c[0] == "exportVideoPreview" for c in calls)

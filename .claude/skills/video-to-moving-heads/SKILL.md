@@ -21,12 +21,15 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
 - `ffmpeg` on PATH. For YouTube: recent yt-dlp (`pip install -U yt-dlp`) **and Node.js** on PATH. Without them a download
   starts and then 403s partway; `fetch_video.py` already enables Node.
 - The show layout needs `MH-1..MH-8` (DmxMovingHeadAdv) and a "Moving Heads Group", plus a layout group **"MH Preview"** framed on the
-  head row. `render_clip` exports the House Preview pane at the pane's pixel size, so the user must have the House Preview **maximised with
-  "MH Preview" selected** (1920x1058 frame, heads ~80 px wide, long beams). This cannot be set from the API.
-  **Always verify the framing before comparing**: `python scripts/mh_frame_check.py write`, render `MH Frame Calibration` (0-6000 ms) with
-  `render_clip`, then `python scripts/mh_frame_check.py check VIDEO`. It must print OK; "WRONG FRAME SIZE" means the pane is not maximised /
-  the preview is not selected (e.g. a 908x634 frame showing the whole house). Expected lens centres of MH-2..MH-7 at 3-6 s are in the script.
-  Head-row crop of a good frame (MH-2..MH-7): `crop=1100:110:340:870`. Beam length scales with model size (`DmxBeamLength` x scale).
+  head row. `render_clip` exports the **House Preview pane**: the *selected preview* in that pane sets the camera and framing, and the pane's
+  pixel size sets the output size unless you pass `width`/`height` (xLights then renders that size regardless of the window). Always render
+  with `width=1920, height=1058`. The user must have **"MH Preview" selected** in the House Preview pane; that cannot be set from the API
+  (no automation command selects a preview or resizes the pane, and window enumeration is blocked).
+  **Always verify the framing before comparing**: `python scripts/mh_frame_check.py write`, render `MH Frame Calibration` (0-6000 ms,
+  width 1920, height 1058), then `python scripts/mh_frame_check.py check VIDEO`. It must print OK. "WRONG FRAME SIZE" = no width/height was
+  passed and the pane is not maximised; a lens-position MISMATCH at 1920x1058 means the wrong preview is selected (the frame then shows the
+  whole house layout instead of the head row). Head-row crop of a good frame (MH-2..MH-7): `crop=1100:110:340:870`.
+  Beam length scales with model size (`DmxBeamLength` x scale).
 
 ## Steps
 1. **Get the video**: `python scripts/fetch_video.py URL --audio` (cached in `~/.cache/xlights-mcp/videos`), then copy the mp4/mp3
