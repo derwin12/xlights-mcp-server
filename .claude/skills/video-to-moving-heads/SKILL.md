@@ -50,6 +50,10 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
    `--hidden edge|away` is only the legacy fallback for a facing file without yoke data (re-run `video_head_facing.py` instead).
    - The yoke constants (YOKE_ARCH/ARMS, rows, columns) are measured on the Pixel Pro head mesh at 1280x720; another rig needs its own.
    - Other rigs (e.g. the 4K I Knew It, different head mesh): `--pan-mode lean` (or `fixed`), group fans on (`--fan-banks 4,4`).
+   - Black-silhouette heads with no lens or yoke to read (I Knew It, Dancing With My Elf: 8 heads, 45 px apart at 1920 wide): skip the facing pass and use
+     `--pan-mode lean`. The grey backdrop panel in that video gave phantom beams until `--background --min-score 40 --cover-level 60` was used;
+     heads that are off must show as off in the `--overlay` test before the full run. Approved as is; idea not yet tried: use group effects with
+     fan pan plus fan tilt for the uniform spreads instead of per-head effects (`mh_fan.py` fans are tilt fans at pan 90 only).
    - `steer` is the cruder version of orient (tilt ~45, pan steers). Fans are tilt fans at pan 90, so steer/orient skip them.
 6. **Build**: `python scripts/video_beams_to_xsq.py beams.json "Name vN" --audio ABSOLUTE_OR_REPO_PATH.mp3 --pan-mode orient --facing facing.json [--hidden away]`.
    `--audio` is written as an absolute existing path (a missing media file makes xLights wait on a prompt and `render_clip` hangs).
