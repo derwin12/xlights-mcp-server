@@ -44,10 +44,11 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
    Then run it for the full video (about 10 min per 4 minutes of video; run in the background and use Monitor).
 4. **Facing pass** (Pixel Pro style heads with a teal lens): `python scripts/video_head_facing.py VIDEO facing.json`.
 5. **Choose the pan mode**. A beam's lean cannot reveal the pan (many pan/tilt pairs lean the same), and the sources never hold a fixed
-   pan. For Pixel Pro videos use `--pan-mode orient --facing facing.json`; the lens visibility fixes the pan.
-   - Heads with no lens showing look like an **arch** with the cap leaning along the beam (no yoke arms): default `--hidden edge`
-     (Doors, Dolly, Bow Wow). They look like a **housing between both yoke arms**: `--hidden away` (Fireflies). Compare a few
-     lens-less heads in the source with probe renders if unsure.
+   pan. For Pixel Pro videos use `--pan-mode orient --facing facing.json`. The facing pass measures two cues per head and frame:
+   the **lens** share (teal pixels: visible = toward the camera) and the **yoke spread** (mean |dx| of the dark body pixels: ~10 px =
+   arms either side = pan ~0/180, ~3.6 px = the arch = pan ~90). Look at the yoke, not just the beam: this is how heads are posed.
+   `--hidden edge|away` is only the legacy fallback for a facing file without yoke data (re-run `video_head_facing.py` instead).
+   - The yoke constants (YOKE_ARCH/ARMS, rows, columns) are measured on the Pixel Pro head mesh at 1280x720; another rig needs its own.
    - Other rigs (e.g. the 4K I Knew It, different head mesh): `--pan-mode lean` (or `fixed`), group fans on (`--fan-banks 4,4`).
    - `steer` is the cruder version of orient (tilt ~45, pan steers). Fans are tilt fans at pan 90, so steer/orient skip them.
 6. **Build**: `python scripts/video_beams_to_xsq.py beams.json "Name vN" --audio ABSOLUTE_OR_REPO_PATH.mp3 --pan-mode orient --facing facing.json [--hidden away]`.
@@ -68,13 +69,16 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
 10. **Wrap up**: save the finals, archive the rest, update `MANIFEST.txt` (and the project memory), commit scripts (not videos).
 
 ## How orient mode works (so you can debug it)
-With r = lens fraction / 0.115 (share of the beam toward the camera) and the measured lean L, a candidate pan p fixes the tilt
-(`tan t = tan L / sin p`) and predicts the toward-camera share `bc = sin t cos p`. `viterbi_pose` picks, per run of lit frames, the pan path
-whose bc best matches r, with a cost for changing pan (`PAN_LAMBDA`), so noise in r near the hidden threshold cannot flip a head between two
-poses (a flip is a 180 deg swing the motors cannot follow; it made beams cross at Bow Wow Wow 51 s). Hidden lens (r < 0.12): `edge` = bc ~ 0
-(head sideways, arch); `away` = bc at or below -sin 45 (turned away, arms showing, pan near 0). Dark gaps park the head like the source,
-then move to the next beam's pose for the last 1.5 s. A dark lens facing the camera is the same gray as a head's back, so colour cannot
-separate them.
+With r = lens fraction / 0.115 (share of the beam toward the camera), the yoke |cos pan| c, and the measured lean L, a candidate pan p fixes
+the tilt (`tan t = tan L / sin p`) and predicts the toward-camera share `bc = sin t cos p`. `viterbi_pose` picks, per run of lit frames, the pan
+path whose bc best matches r and whose |cos p| best matches c, over pans -175..175 (a head turning from facing the camera through sideways to
+facing away keeps rotating, 85 -> 135; a -90..90 range could only flip to pan -80 / tilt -59 in ~125 ms, seen at Fireflies 49.7 s).
+Costs: `PAN_LAMBDA` per 90 deg of pan change; `PAN_JUMP` for > 45 deg in one video frame; `PAN_START_BACK` for a run starting beyond +-90.
+(p, t) and (p +- 180, -t) show the same lean and lens share, so without those two a short beam dropout starts a piece of a path on the
+mirror pose at random (Fireflies 131.4 s). A **group pull** (`GROUP_WEIGHT`, `--no-group` to disable) nudges each head's pan toward the median
+pan of its *peers*, the other heads whose lean, lens and yoke currently read alike (never the all-head median: the halves of a symmetric fan
+differ). Dark gaps park the head like the source, then move to the next beam's pose for the last 1.5 s. A dark lens facing the camera is the same
+gray as a head's back, so colour cannot separate them; the yoke can.
 
 ## Shimmer and strobe
 The source flickers some beams: 1-frame alternation (Fireflies ~21 s, 20 Hz) and longer patterns (Bow Wow Wow 1:52: 3 frames on, 3 off,
