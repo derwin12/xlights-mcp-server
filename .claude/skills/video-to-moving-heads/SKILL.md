@@ -20,8 +20,13 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
 - xLights running with xFade automation: `xlights_status` must say reachable (`render_clip` needs it).
 - `ffmpeg` on PATH. For YouTube: recent yt-dlp (`pip install -U yt-dlp`) **and Node.js** on PATH. Without them a download
   starts and then 403s partway; `fetch_video.py` already enables Node.
-- The show layout needs `MH-1..MH-8` (DmxMovingHeadAdv) and a "Moving Heads Group". Check the user's preview is zoomed on the
-  head row (render_clip captures the preview exactly as shown; if the zoom changes, head positions in replica frames move).
+- The show layout needs `MH-1..MH-8` (DmxMovingHeadAdv) and a "Moving Heads Group", plus a layout group **"MH Preview"** framed on the
+  head row. `render_clip` exports the House Preview pane at the pane's pixel size, so the user must have the House Preview **maximised with
+  "MH Preview" selected** (1920x1058 frame, heads ~80 px wide, long beams). This cannot be set from the API.
+  **Always verify the framing before comparing**: `python scripts/mh_frame_check.py write`, render `MH Frame Calibration` (0-6000 ms) with
+  `render_clip`, then `python scripts/mh_frame_check.py check VIDEO`. It must print OK; "WRONG FRAME SIZE" means the pane is not maximised /
+  the preview is not selected (e.g. a 908x634 frame showing the whole house). Expected lens centres of MH-2..MH-7 at 3-6 s are in the script.
+  Head-row crop of a good frame (MH-2..MH-7): `crop=1100:110:340:870`. Beam length scales with model size (`DmxBeamLength` x scale).
 
 ## Steps
 1. **Get the video**: `python scripts/fetch_video.py URL --audio` (cached in `~/.cache/xlights-mcp/videos`), then copy the mp4/mp3
@@ -47,7 +52,8 @@ Finished sequences go in `F:\ShowFolderAI`; superseded versions get moved to `ar
    Use a **new sequence name for every revision**: xLights renders a same-named sequence from its stale open copy.
 7. **Render**: `render_clip` with the full range and an `output_path` in the scratchpad.
 8. **Verify** (do all of these, then show the user a side-by-side and open it):
-   - Head bodies at several timestamps: crop the source heads (`scale=1280:720,crop=300:60:390:160`) and the replica heads next to each other.
+   - Head bodies at several timestamps: crop the source heads (`scale=1280:720,crop=300:60:390:160`, then `scale=1650:330`) and the replica heads
+     (`crop=1100:110:340:870`, then `scale=1650:165`) and stack them.
      Check lens visible / arch / housing-with-arms and the tilt direction. Pick moments with different facing states (see `facing.json`).
    - Flicker: count dark effects <= 200 ms in the .xsq (should be near 0), and compare beam turn-offs per head in the beams JSON
      (gaps <= 0.2 s bridged) with those in the sequence. A short dark gap in a steady beam is a detector dropout, never real, unless the
