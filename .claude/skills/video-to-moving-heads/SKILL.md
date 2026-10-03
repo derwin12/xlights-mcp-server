@@ -86,8 +86,10 @@ writes every channel, so Brightness kills the beam and Min/Max swing the pan/til
 
 ## Traps seen so far
 - Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
-- Preview `SlewLimit` is 100 deg/s (preview drawing only, not the DMX values); fast source sweeps (~185 deg/s) lag in the preview.
-  Do not change the layout's SlewLimit without asking.
+- Preview `SlewLimit` is a speed cap on how the head is *drawn* (deg/s per motor; not the DMX values). It was 100 and the source sweeps
+  reach ~185 deg/s, so fast moves lagged in renders; on 2026-10-03 the user's layout was changed to 250 for all 16 motors (backups in
+  `archive_beam_work\layout_backups`). Do not change it again without asking. xLights' `setModelProperty` automation call only worked for
+  MH-1 (other models silently unchanged), so layout edits were made in the file with xLights closed, after a backup, and verified by diff.
 - Replica beams start at the lens, which shifts as heads tilt, so measuring replica angles by casting rays from fixed head positions is
   unreliable in dense fans; judge by eye (head bodies and beams).
 - `git status` shows unrelated files (CLAUDE.md, other scripts): stage only your own.
