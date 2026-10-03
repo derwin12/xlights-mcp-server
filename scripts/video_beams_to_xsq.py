@@ -160,6 +160,8 @@ def merge_short_segments(t, idx, min_ms):
 
 
 PAN_STATES = np.array(sorted({*np.arange(-90.0, 91.0, 5.0), -2.5, 2.5} - {0.0}))  # candidate pans; 0 is handled apart
+TILT_PRIOR = 0.06  # cost of tilt^2 (fraction of 90 deg squared) in the pan path
+TILT_SOFT_LIMIT = 65.0  # deg: beyond this the tilt cost climbs steeply
 PAN_LAMBDA = 0.04  # cost of a 90 deg pan change, in squared lens-share units: a pan moves only when the lens data clearly asks
 
 
@@ -191,7 +193,10 @@ def viterbi_pose(lean, r):
                      (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2)
     else:
         D = (np.maximum(bc, 0.0) - vis) ** 2 + 10 * np.maximum(-bc - 0.03, 0.0) ** 2
-    D = D + 10.0 * (np.abs(t) > np.radians(MAX_TILT - 1.0)) + 1e-3 * np.abs(t) / (np.pi / 2)
+    # Extreme tilts (head nearly horizontal, pointing straight at or away from the camera) are physically odd and, with
+    # fast motors, visibly wrong; without this the smooth-pan cost makes a steep lean from pan ~0 with tilt ~-85.
+    ta = np.abs(t) / (np.pi / 2)
+    D = D + 10.0 * (np.abs(t) > np.radians(MAX_TILT - 1.0)) + 1e-3 * ta + TILT_PRIOR * ta ** 2         + 0.5 * np.maximum(np.abs(np.degrees(t)) - TILT_SOFT_LIMIT, 0.0) ** 2 / 15.0 ** 2
     D[:, -1] += 10.0 * (np.abs(np.degrees(L)) > 2.0)  # pan 0 cannot lean
     trans = PAN_LAMBDA * np.abs(pans[:, None] - pans[None, :]) / 90.0
     cost, back = D[0].copy(), np.zeros((n, K + 1), dtype=int)
