@@ -24,3 +24,6 @@ effect_showcase_*.mp4
 feature_showcase_*.mp4
 sample.gif
 video_to_gif.py
+
+# Moving head source videos used for beam-analysis tests (large; kept locally)
+test_videos/
