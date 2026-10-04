@@ -357,13 +357,16 @@ def mh_effect_settings(pan_slider, tilt_slider, slots, link=False):
     return ",".join(f"{k}={v}" for k, v in sorted(keys.items()))
 
 
-def mh_settings(p0, p1, t0, t1, color_hsv, dimmer, lit=True, link=False, fixture=1):
+def mh_settings(p0, p1, t0, t1, color_hsv, dimmer, lit=True, link=False):
+    """Settings of one per-head effect. The head's settings always go in slot 1 with Heads: 1, whatever the model: xLights
+    converts the slot to the fixture number when it loads the sequence, and an imported effect mapped onto MH-1 needs no
+    conversion (a slot already keyed to another fixture is not converted on import until the effect is clicked)."""
     pan_cmd, pan_slider = _axis("Pan", p0, p1)
     tilt_cmd, tilt_slider = _axis("Tilt", t0, t1)
     h, s, v = color_hsv
     slot = (f"Color: {h:.6f}&comma;{s:.6f}&comma;{v:.6f};{dimmer};{pan_cmd};{tilt_cmd};"
-            f"PanOffset: 0.0;TiltOffset: 0.0;Groupings: 1.0;Cycles: 1.0;Heads: {fixture}" + (";Shutter: On" if lit else ""))
-    return mh_effect_settings(pan_slider, tilt_slider, {fixture: slot}, link)
+            f"PanOffset: 0.0;TiltOffset: 0.0;Groupings: 1.0;Cycles: 1.0;Heads: 1" + (";Shutter: On" if lit else ""))
+    return mh_effect_settings(pan_slider, tilt_slider, {1: slot}, link)
 
 
 def snap(ms):
@@ -459,7 +462,6 @@ def main():
     t0 = frames[0]["t"]
     frame_dt = 1.0 / data["fps"]
 
-    fixture_of = {m: int(re.search(r"(\d+)$", m).group(1)) if re.search(r"(\d+)$", m) else 1 for m in models}  # MH-n is fixture n: its settings live in slot n
     plan = pts.Plan(first=[args.group])  # group above the MH models in the master view
     n_eff = 0
     refs = []
@@ -613,7 +615,7 @@ def main():
                     filled.append(seg[:8] + (True, False))
                 cursor, prev = seg[1], (seg[3], seg[5])
         for start, end, p0, p1, t0_, t1_, hsv, dimmer, lit, link in filled:
-            plan.add(model, "Moving Head", start, end, mh_settings(p0, p1, t0_, t1_, hsv, dimmer, lit, link, fixture_of[model]),
+            plan.add(model, "Moving Head", start, end, mh_settings(p0, p1, t0_, t1_, hsv, dimmer, lit, link),
                      ["#FFFFFF"])
             n_eff += 1
 
