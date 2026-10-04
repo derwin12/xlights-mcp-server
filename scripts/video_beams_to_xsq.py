@@ -28,6 +28,9 @@ import prop_test_sequence as pts  # noqa: E402  (reuses its .xsq writer)
 PAN = 90.0
 FRAME_MS = 25  # xLights sequence timing
 MIN_SEG_MS = 100
+DIM_V = 0.3  # brightness (0-1) below which a weakly saturated beam colour is treated as grey (noise)
+DIM_SAT = 0.5
+MIN_RUN_MS = 50  # a whole beam run (one segment) this short is a real flash (strobe/chase), not a piece of a longer beam
 MAX_BRIDGE_S = 0.2  # longest lone beam dropout (s) treated as detector noise and bridged
 SHIMMER_GAPS = 2  # this many other gaps within SHIMMER_WINDOW_S makes a gap part of a shimmer, not noise
 SHIMMER_WINDOW_S = 0.6
@@ -77,7 +80,9 @@ def douglas_peucker(xs, ys, eps):
 def hue_class(rgb):
     """-1 = white/grey, else hue bucket (30 deg)."""
     r, g, b = (c / 255 for c in rgb)
-    h, s, _ = colorsys.rgb_to_hsv(r, g, b)
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    if v < DIM_V and s < DIM_SAT:  # a dim frame (fade-in/out) with a faint tint is compression noise, not a colour
+        return -1
     return -1 if s < 0.25 else int(h * 360 // 30) % 12
 
 
@@ -611,14 +616,14 @@ def main():
             w = r["w"]
             sel = w >= 0.5 * w.max()
             mean_rgb = (r["rgb"][sel] * w[sel, None]).sum(0) / w[sel].sum()
-            hh, ss, _ = colorsys.rgb_to_hsv(*(c / 255 for c in mean_rgb))
-            ss = 0.0 if (ss < 0.25 or args.white) else min(ss, 1.0)
+            hh, ss, vv = colorsys.rgb_to_hsv(*(c / 255 for c in mean_rgb))
+            ss = 0.0 if (ss < 0.25 or args.white or (vv < DIM_V and ss < DIM_SAT)) else min(ss, 1.0)
             if ss > 0 and args.palette == "wheel":
                 hh, ss = snap_to_wheel(hh, args.show)
             for a, b in zip(idx[:-1], idx[1:]):
                 start = snap((t[a] - t0) * 1000)
                 end = snap((t[b] - t0 + (frame_dt if b == idx[-1] and b == len(t) - 1 else 0)) * 1000)
-                if end - start < MIN_SEG_MS:
+                if end - start < (MIN_RUN_MS if len(idx) == 2 else MIN_SEG_MS):
                     continue
                 sl = slice(a, b + 1)
                 cap = STROBE_DIMMER_POINTS if r["strobe"][sl].any() else 8

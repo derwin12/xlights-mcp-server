@@ -52,8 +52,49 @@ def find_heads(video):
                     y += 1
                 bottoms.append(y)
             y = int(np.median(bottoms)) + 12
+            find_heads.bottom = int(np.median(bottoms))
             return ";".join(f"{int(round(x))},{y}" for x in c), t
     sys.exit(f"{video.name}: no frame with 8 evenly spaced vertical beams; measure the heads by hand")
+
+
+def fan_window(video):
+    """Start of a 3 s stretch with the most lit pixels above the head row (a wide fan), for tuning the head y."""
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                str(video)], capture_output=True, text=True).stdout)
+    best = (0, 5.0)
+    for t in np.arange(2, dur - 4, 1.0):
+        g = gray_frame(video, t)
+        if g is not None:
+            lit = int((g[0:220, 250:760] > 60).sum())
+            if lit > best[0]:
+                best = (lit, float(t))
+    return max(0.0, best[1] - 0.5)
+
+
+def tune_y(video, heads, bottom):
+    """Head y that finds the most beams on a fan window. For a strongly leaning beam a few px of y error shifts the expected beam
+    sideways past the detector's tolerance, so the outer heads of a fan vanish (Wrap Me Up: bottom+12 found 87 of 176 frames on head 1,
+    bottom+2 found 176)."""
+    xs = [int(h.split(",")[0]) for h in heads.split(";")]
+    start = fan_window(video)
+    cands = [bottom + d for d in range(-4, 35, 3)]  # the beam bottom can sit well above the head when beams fade toward it
+    procs = []
+    for y in cands:
+        hs = ";".join(f"{x},{y}" for x in xs)
+        out = VID / f"_tune_{video.stem}_{y}.json"
+        procs.append((y, out, subprocess.Popen([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(video), str(out),
+                                                 "--heads", hs] + ANALYSIS + ["--start", str(start), "--duration", "3"],
+                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)))
+    score = {}
+    for y, out, pr in procs:
+        pr.wait()
+        b = json.load(open(out))
+        score[y] = sum(1 for fr in b["frames"] for h in fr["heads"] if h)
+        out.unlink()
+    best = max(score.values())
+    y = min((c for c in cands if score[c] >= 0.97 * best), key=lambda c: abs(c - sorted(k for k in cands if score[k] >= 0.97 * best)[len(sorted(k for k in cands if score[k] >= 0.97 * best)) // 2]))
+    print(f"{video.stem}: y tuning on {start:.1f}-{start + 3:.1f} s {score} -> y={y}", flush=True)
+    return ";".join(f"{x},{y}" for x in xs)
 
 
 def prep(vid, slug):
@@ -65,6 +106,7 @@ def prep(vid, slug):
             sys.exit(f"missing {src} (a video with no audio track cannot be sequenced)")
         (VID / f"{slug}.{ext}").write_bytes(src.read_bytes())
     heads, t = find_heads(VID / f"{slug}.mp4")
+    heads = tune_y(VID / f"{slug}.mp4", heads, find_heads.bottom)
     (VID / f"{slug}_heads.txt").write_text(heads)
     print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(VID / f"{slug}.mp4"),
@@ -76,6 +118,7 @@ def prep(vid, slug):
 def reanalyze(slug):
     """Re-measure the heads (strict vertical-beam test) and re-run the beam analysis on a video already in test_videos."""
     heads, t = find_heads(VID / f"{slug}.mp4")
+    heads = tune_y(VID / f"{slug}.mp4", heads, find_heads.bottom)
     (VID / f"{slug}_heads.txt").write_text(heads)
     print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(VID / f"{slug}.mp4"),
