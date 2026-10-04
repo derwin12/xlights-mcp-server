@@ -314,18 +314,56 @@ def _axis(axis, a0, a1):
     return fmt_vc(axis, a0, a1), 0
 
 
-def mh_settings(p0, p1, t0, t1, color_hsv, dimmer, lit=True, link=False):
+def mh_effect_settings(pan_slider, tilt_slider, slots, link=False):
+    """Full Moving Head effect settings in the form xLights itself saves (keys sorted, every key present).
+
+    slots maps fixture number (1..8) -> its "Settings" text; unused fixtures get the empty slot xLights writes. A string that
+    leaves keys out (layer blend, shutter flags, pattern, MH5-8 slots) renders from the loading xLights but not from an
+    exported/imported copy until each effect is clicked and the panel rewrites the missing keys.
+    """
+    keys = {
+        "B_CHOICE_BufferStyle": "Per Model Default",
+        "E_CHECKBOX_AUTO_SHUTTER": "1",
+        "E_CHECKBOX_MHIgnorePan": "0",
+        "E_CHECKBOX_MHIgnoreTilt": "0",
+        "E_CHECKBOX_MHLinkToNext": "1" if link else "0",
+        "E_CHECKBOX_MHPatternEnable": "0",
+        "E_CHECKBOX_MHShutterEnable": "1",
+        "E_CHOICE_MHPattern": "Circle",
+        "E_NOTEBOOK1": "Position",
+        "E_NOTEBOOK2": "Color",
+        "E_SLIDER_MHCycles": "10",
+        "E_SLIDER_MHGroupings": "1",
+        "E_SLIDER_MHPan": str(pan_slider),
+        "E_SLIDER_MHPanOffset": "0",
+        "E_SLIDER_MHPathScale": "0",
+        "E_SLIDER_MHPatternHeight": "45",
+        "E_SLIDER_MHPatternPhaseOffset": "0",
+        "E_SLIDER_MHPatternRotation": "0",
+        "E_SLIDER_MHPatternStartOffset": "0",
+        "E_SLIDER_MHPatternWidth": "90",
+        "E_SLIDER_MHPatternXOffset": "0",
+        "E_SLIDER_MHPatternYOffset": "0",
+        "E_SLIDER_MHTilt": str(tilt_slider),
+        "E_SLIDER_MHTiltOffset": "0",
+        "E_SLIDER_MHTimeOffset": "0",
+        "E_TEXTCTRL_MHPathDef": "",
+        "T_CHECKBOX_LayerMorph": "0",
+        "T_CHOICE_LayerMethod": "Normal",
+        "T_SLIDER_EffectLayerMix": "0",
+    }
+    for n in range(1, 9):
+        keys[f"E_TEXTCTRL_MH{n}_Settings"] = slots.get(n, "")
+    return ",".join(f"{k}={v}" for k, v in sorted(keys.items()))
+
+
+def mh_settings(p0, p1, t0, t1, color_hsv, dimmer, lit=True, link=False, fixture=1):
     pan_cmd, pan_slider = _axis("Pan", p0, p1)
     tilt_cmd, tilt_slider = _axis("Tilt", t0, t1)
     h, s, v = color_hsv
     slot = (f"Color: {h:.6f}&comma;{s:.6f}&comma;{v:.6f};{dimmer};{pan_cmd};{tilt_cmd};"
-            "PanOffset: 0.0;TiltOffset: 0.0;Groupings: 1.0;Cycles: 1.0;Heads: 1" + (";Shutter: On" if lit else ""))
-    return ("B_CHOICE_BufferStyle=Per Model Default,E_CHECKBOX_MHIgnorePan=0,E_CHECKBOX_MHIgnoreTilt=0,"
-            "E_NOTEBOOK1=Position,E_NOTEBOOK2=Color,E_SLIDER_MHCycles=10,E_SLIDER_MHGroupings=1,"
-            f"E_SLIDER_MHPan={pan_slider},E_SLIDER_MHPanOffset=0,E_SLIDER_MHPathScale=0,"
-            f"E_SLIDER_MHTilt={tilt_slider},E_SLIDER_MHTiltOffset=0,E_SLIDER_MHTimeOffset=0,"
-            + ("E_CHECKBOX_MHLinkToNext=1," if link else "")
-            + f"E_TEXTCTRL_MH1_Settings={slot}")
+            f"PanOffset: 0.0;TiltOffset: 0.0;Groupings: 1.0;Cycles: 1.0;Heads: {fixture}" + (";Shutter: On" if lit else ""))
+    return mh_effect_settings(pan_slider, tilt_slider, {fixture: slot}, link)
 
 
 def snap(ms):
@@ -421,6 +459,7 @@ def main():
     t0 = frames[0]["t"]
     frame_dt = 1.0 / data["fps"]
 
+    fixture_of = {m: int(re.search(r"(\d+)$", m).group(1)) if re.search(r"(\d+)$", m) else 1 for m in models}  # MH-n is fixture n: its settings live in slot n
     plan = pts.Plan(first=[args.group])  # group above the MH models in the master view
     n_eff = 0
     refs = []
@@ -574,7 +613,7 @@ def main():
                     filled.append(seg[:8] + (True, False))
                 cursor, prev = seg[1], (seg[3], seg[5])
         for start, end, p0, p1, t0_, t1_, hsv, dimmer, lit, link in filled:
-            plan.add(model, "Moving Head", start, end, mh_settings(p0, p1, t0_, t1_, hsv, dimmer, lit, link),
+            plan.add(model, "Moving Head", start, end, mh_settings(p0, p1, t0_, t1_, hsv, dimmer, lit, link, fixture_of[model]),
                      ["#FFFFFF"])
             n_eff += 1
 

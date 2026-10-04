@@ -159,11 +159,7 @@ def slot_text(fixtures, tilt_cmd, offset_cmd, dimmer, hsv, lit):
 
 def group_settings(slots):
     """Effect settings for a group effect; slots maps fixture number -> slot text."""
-    head = ("B_CHOICE_BufferStyle=Per Model Default,E_CHECKBOX_MHIgnorePan=0,E_CHECKBOX_MHIgnoreTilt=0,"
-            "E_NOTEBOOK1=Position,E_NOTEBOOK2=Color,E_SLIDER_MHCycles=10,E_SLIDER_MHGroupings=1,"
-            "E_SLIDER_MHPan=0,E_SLIDER_MHPanOffset=0,E_SLIDER_MHPathScale=0,E_SLIDER_MHTilt=0,"
-            "E_SLIDER_MHTiltOffset=0,E_SLIDER_MHTimeOffset=0")
-    return head + "".join(f",E_TEXTCTRL_MH{n}_Settings={t}" for n, t in sorted(slots.items()))
+    return v2x.mh_effect_settings(0, 0, slots)
 
 
 def _static(name, value):

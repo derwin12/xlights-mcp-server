@@ -34,8 +34,8 @@ def write():
     plan = pts.Plan()
     for i, (p, t) in enumerate(zip(pan, tilt)):
         m = f"MH-{i + 2}"
-        plan.add(m, "Moving Head", 0, 3000, v.mh_settings(p, p, t, t, (0.0, 0.0, 1.0), v.DARK_DIMMER, False, False), ["#FFFFFF"])
-        plan.add(m, "Moving Head", 3000, 6000, v.mh_settings(p, p, t, t, (0.0, 0.0, 1.0), on, True, False), ["#FFFFFF"])
+        plan.add(m, "Moving Head", 0, 3000, v.mh_settings(p, p, t, t, (0.0, 0.0, 1.0), v.DARK_DIMMER, False, False, i + 2), ["#FFFFFF"])
+        plan.add(m, "Moving Head", 3000, 6000, v.mh_settings(p, p, t, t, (0.0, 0.0, 1.0), on, True, False, i + 2), ["#FFFFFF"])
     out = SHOW / "MH Frame Calibration.xsq"
     pts.write(plan, 6000, out)
     print(f"wrote {out}; render it with render_clip (0-6000 ms) and run: mh_frame_check.py check VIDEO")
