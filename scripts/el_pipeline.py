@@ -57,6 +57,51 @@ def find_heads(video):
     sys.exit(f"{video.name}: no frame with 8 evenly spaced vertical beams; measure the heads by hand")
 
 
+def find_heads_by_beams(video):
+    """Fallback when no frame has all 8 beams vertical: collect the x of every tall vertical beam over the whole video, cluster the
+    columns and expect 8 evenly spaced clusters. Returns (heads string, beam bottom y)."""
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                str(video)], capture_output=True, text=True).stdout)
+    hist = np.zeros(800)
+    bots = []
+    for t in np.arange(0.5, dur - 0.5, 0.25):
+        g = gray_frame(video, t)
+        if g is None:
+            continue
+        for x0 in range(200, 800):
+            if (g[30:200, x0] > 60).sum() >= 120:  # a tall vertical bright run above the head row
+                hist[x0] += 1
+                y = 200
+                while y < 400 and g[y + 1, x0] > 35:
+                    y += 1
+                bots.append(y)
+    clusters, cur = [], []
+    for x in range(200, 800):
+        if hist[x] > 0:
+            cur.append(x)
+        elif cur:
+            clusters.append(cur)
+            cur = []
+    cent = [float(np.average(c, weights=hist[c])) for c in clusters if hist[c].sum() >= 8]
+    # The 8 heads are evenly spaced: fit x = x0 + k * step to the clusters (a head that never fired leaves a gap; noisy
+    # clusters sit a few px off) and generate all 8 from the fit.
+    if len(cent) < 5:
+        sys.exit(f"{video.name}: only {len(cent)} beam clusters {[round(c) for c in cent]}; measure by hand")
+    step = float(np.median([d / max(1, round(d / 29.0)) for d in np.diff(cent)]))
+    ks = [int(round((c - cent[0]) / step)) for c in cent]
+    if len(set(ks)) != len(ks) or max(ks) > 7:
+        sys.exit(f"{video.name}: beam clusters {[round(c) for c in cent]} do not fit 8 evenly spaced heads; measure by hand")
+    A = np.polyfit(ks, cent, 1)  # slope = step, intercept = x of the first cluster
+    resid = float(np.abs(np.polyval(A, ks) - cent).max())
+    if resid > 5:
+        sys.exit(f"{video.name}: even-spacing fit is {resid:.1f} px off; measure by hand")
+    if max(ks) - min(ks) + 1 != 8:  # the clusters must span all 8 head slots (a missing one in the middle is fine)
+        sys.exit(f"{video.name}: clusters {[round(c) for c in cent]} span {max(ks) - min(ks) + 1} head slots, not 8; measure by hand")
+    cent = [float(A[1] + A[0] * k) for k in range(8)]
+    bottom = int(np.median(bots))
+    return ";".join(f"{int(round(x))},{bottom + 12}" for x in cent), bottom
+
+
 def fan_window(video):
     """Start of a 3 s stretch with the most lit pixels above the head row (a wide fan), for tuning the head y."""
     dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
@@ -97,6 +142,19 @@ def tune_y(video, heads, bottom):
     return ";".join(f"{x},{y}" for x in xs)
 
 
+def locate_heads(video):
+    """Strict vertical-beam frame if there is one, else cluster the beams over the whole video."""
+    try:
+        heads, t = find_heads(video)
+        locate_heads.bottom = find_heads.bottom
+        return heads, t
+    except SystemExit:
+        heads, bottom = find_heads_by_beams(video)
+        locate_heads.bottom = bottom
+        print(f"{video.stem}: no frame with 8 vertical beams; heads from beam clusters", flush=True)
+        return heads, -1
+
+
 def prep(vid, slug):
     subprocess.run([sys.executable, str(ROOT / "scripts" / "fetch_video.py"), f"https://www.youtube.com/watch?v={vid}",
                     "--audio"], check=True, capture_output=True)
@@ -105,8 +163,8 @@ def prep(vid, slug):
         if not src.exists():
             sys.exit(f"missing {src} (a video with no audio track cannot be sequenced)")
         (VID / f"{slug}.{ext}").write_bytes(src.read_bytes())
-    heads, t = find_heads(VID / f"{slug}.mp4")
-    heads = tune_y(VID / f"{slug}.mp4", heads, find_heads.bottom)
+    heads, t = locate_heads(VID / f"{slug}.mp4")
+    heads = tune_y(VID / f"{slug}.mp4", heads, locate_heads.bottom)
     (VID / f"{slug}_heads.txt").write_text(heads)
     print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(VID / f"{slug}.mp4"),
@@ -117,8 +175,8 @@ def prep(vid, slug):
 
 def reanalyze(slug):
     """Re-measure the heads (strict vertical-beam test) and re-run the beam analysis on a video already in test_videos."""
-    heads, t = find_heads(VID / f"{slug}.mp4")
-    heads = tune_y(VID / f"{slug}.mp4", heads, find_heads.bottom)
+    heads, t = locate_heads(VID / f"{slug}.mp4")
+    heads = tune_y(VID / f"{slug}.mp4", heads, locate_heads.bottom)
     (VID / f"{slug}_heads.txt").write_text(heads)
     print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(VID / f"{slug}.mp4"),
