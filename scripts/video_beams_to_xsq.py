@@ -387,6 +387,38 @@ def mh_settings(p0, p1, t0, t1, color_hsv, dimmer, lit=True, link=False):
     return mh_effect_settings(pan_slider, tilt_slider, {1: slot}, link)
 
 
+WHEEL_DEFAULT = ((0.0, 1.0), (1.0 / 3.0, 1.0), (2.0 / 3.0, 1.0))  # red, green, blue (the layout's wheel before extra colours)
+_wheel_cache = {}
+
+
+def wheel_colors(show):
+    """Coloured entries (hue 0..1, saturation 0..1) of the MH-1 colour wheel in the show's layout, white left out.
+    The fixtures have a colour wheel (DmxColorWheelColorN); a colour that is not on it renders white."""
+    key = str(show)
+    if key not in _wheel_cache:
+        import re
+        cols = []
+        try:
+            xml = (Path(show) / "xlights_rgbeffects.xml").read_text(encoding="utf-8")
+            m = re.search(r'<model [^>]*name="MH-1"[^>]*>', xml)
+            for c in sorted(set(re.findall(r'DmxColorWheelColor\d+="#([0-9a-fA-F]{6})"', m.group(0) if m else ""))):
+                h, sat, _ = colorsys.rgb_to_hsv(*(int(c[k:k + 2], 16) / 255 for k in (0, 2, 4)))
+                if sat > 0.2:
+                    cols.append((h, sat))
+        except OSError:
+            pass
+        _wheel_cache[key] = tuple(cols) or WHEEL_DEFAULT
+    return _wheel_cache[key]
+
+
+def snap_to_wheel(hue, show):
+    """The wheel colour nearest in hue to `hue` (0..1), as (hue, saturation): every beam of a colour gets the same
+    colour, and one the fixture can actually show."""
+    cols = wheel_colors(show)
+    d = [min(abs(hue - h), 1.0 - abs(hue - h)) for h, _ in cols]
+    return cols[d.index(min(d))]
+
+
 def snap(ms):
     return int(round(ms / FRAME_MS)) * FRAME_MS
 
@@ -455,6 +487,7 @@ def main():
     ap.add_argument("--group", default="Moving Heads Group",
                     help="model group holding MH-1..MH-8 (fixtures 1-8): uniform fans become group effects")
     ap.add_argument("--no-group", action="store_true", help="orient mode: do not pull each head's pan toward the group's")
+    ap.add_argument("--palette", choices=["wheel", "free"], default="wheel", help="wheel (default): snap each beam colour to the fixtures' colour wheel (red, green, blue; the same colour for every beam of that colour); free: use the measured colour")
     ap.add_argument("--white", action="store_true", help="force every beam white (the source beams are white; coloured roofline lights next to a beam otherwise tint it)")
     ap.add_argument("--no-fans", action="store_true", help="skip fan detection; per-head effects only")
     ap.add_argument("--fan-banks", help="heads fanned together, left to right, e.g. 4,4 or 6 or 3,3 (default: 4,4 for 8 "
@@ -580,6 +613,8 @@ def main():
             mean_rgb = (r["rgb"][sel] * w[sel, None]).sum(0) / w[sel].sum()
             hh, ss, _ = colorsys.rgb_to_hsv(*(c / 255 for c in mean_rgb))
             ss = 0.0 if (ss < 0.25 or args.white) else min(ss, 1.0)
+            if ss > 0 and args.palette == "wheel":
+                hh, ss = snap_to_wheel(hh, args.show)
             for a, b in zip(idx[:-1], idx[1:]):
                 start = snap((t[a] - t0) * 1000)
                 end = snap((t[b] - t0 + (frame_dt if b == idx[-1] and b == len(t) - 1 else 0)) * 1000)

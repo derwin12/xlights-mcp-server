@@ -82,7 +82,10 @@ def analyze_frame(img, rays):
         ang = float((ANGLES[lo:hi] * w).sum() / w.sum())
         m = valid[i]
         px = img[ys[i][m], xs[i][m]].astype(np.float32)
-        bright = px[px.max(axis=1) > 0.5 * px.max()].mean(axis=0)  # BGR
+        # Median of the lit pixels along the ray: a beam covers most of it, while a lit house outline it crosses is a few
+        # pixels (and brighter, so a 0.5 * max cut-off would keep only the outline and tint the beam).
+        lit = px[px.max(axis=1) > COVER_LEVEL]
+        bright = np.median(lit if len(lit) else px, axis=0)  # BGR
         b, g, r = (float(v) for v in bright)
         hsv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0, 0]
         out.append({"angle": round(ang, 2), "intensity": round(float(raw[i]) / 255, 3),
