@@ -34,6 +34,9 @@ SHIMMER_WINDOW_S = 0.6
 SHIMMER_MAX_GAP_S = 0.3  # longest gap that can belong to a shimmer
 MAX_TILT = 90.0
 PRE_POSITION_MS = 1500  # orient mode: dark head moves to the next beam's pose this long before it
+UPRIGHT_PRE_MS = 500  # --pan-mode upright: how long before a beam a dark head starts moving to its pose
+UPRIGHT_CAP = 90.0  # --pan-mode upright: largest pan (deg); lower keeps the yoke arms visible, a wide lean then comes from more tilt
+UPRIGHT_FULL = 10.0  # --pan-mode upright: lean (deg) at which pan reaches 90
 STEER_TILT = 45.0  # --pan-mode steer: tilt held here (rises only when a wide lean needs it)
 HIDDEN_LENS_MODE = "edge"  # what a hidden lens means: "edge" (head sideways) or "away" (turned from the camera)
 HIDDEN_LENS = 0.12  # share of the beam toward the camera below which the lens counts as hidden
@@ -262,17 +265,29 @@ def steer_pose(lean):
     return pan, tilt
 
 
-def pose_from_lean(lean, mode, gain, toward=None, yoke_cos=None, group=None):
+def pose_from_lean(lean, mode, gain, toward=None, yoke_cos=None, group=None, args_upright_full=None, args_upright_cap=None):
     """(pan, tilt) arrays in degrees that show the given on-screen lean to a front camera.
 
     toward (orient mode): per-frame 0..1 share of the beam that points at the camera, read from how
     much of the head's lens shows (video_head_facing.py); see viterbi_pose.
     """
     lean = np.clip(lean, -80.0, 80.0)
+    args_upright_full = args_upright_full or UPRIGHT_FULL
+    args_upright_cap = args_upright_cap or UPRIGHT_CAP
     if mode == "fixed":
         return np.full_like(lean, PAN), lean
     if mode == "orient" and toward is not None:
         return viterbi_pose(lean, np.clip(toward, 0.0, 1.0), yoke_cos, group)
+    if mode == "upright":
+        # A vertical beam is tilt 0 (head looking straight up, yoke arms either side, no lens face showing);
+        # pan rises 0 -> 90 over the first UPRIGHT_FULL deg of lean, tilt follows from lean = atan(tan(tilt) * sin(pan)).
+        mag = np.abs(lean)
+        # The sign of the lean goes on the pan and the tilt stays positive, so every head tips toward the camera
+        # (as the source heads do); a negative tilt would turn the head's back to the camera.
+        pan = np.sign(lean) * args_upright_cap * np.minimum(1.0, mag / args_upright_full)
+        sin_p = np.sin(np.radians(np.maximum(np.abs(pan), 1e-6)))
+        tilt = np.degrees(np.arctan(np.tan(np.radians(mag)) / sin_p))
+        return pan, np.clip(tilt, 0.0, MAX_TILT)
     if mode in ("steer", "orient"):
         # Tilt is held near STEER_TILT and pan steers the beam: lean = atan(tan(tilt) * sin(pan)).
         # The yoke arms then show on both sides of the lens, as on a PixelPro-style rig, instead of
@@ -363,6 +378,9 @@ def mh_settings(p0, p1, t0, t1, color_hsv, dimmer, lit=True, link=False):
     conversion (a slot already keyed to another fixture is not converted on import until the effect is clicked)."""
     pan_cmd, pan_slider = _axis("Pan", p0, p1)
     tilt_cmd, tilt_slider = _axis("Tilt", t0, t1)
+    if link:
+        # A linked effect (end position follows the next effect) sets only pan and tilt: no colour, dimmer or shutter.
+        return mh_effect_settings(pan_slider, tilt_slider, {1: f"{pan_cmd};{tilt_cmd};Heads: 1"}, link)
     h, s, v = color_hsv
     slot = (f"Color: {h:.6f}&comma;{s:.6f}&comma;{v:.6f};{dimmer};{pan_cmd};{tilt_cmd};"
             f"PanOffset: 0.0;TiltOffset: 0.0;Groupings: 1.0;Cycles: 1.0;Heads: 1" + (";Shutter: On" if lit else ""))
@@ -418,7 +436,9 @@ def main():
                     "the middle six, MH-2..MH-7, for 6 heads)")
     ap.add_argument("--audio", help="audio file (video's soundtrack, aligned to video t=0): sets the "
                     "sequence media file and adds a Beats timing track")
-    ap.add_argument("--pan-mode", choices=["fixed", "lean", "steer", "orient"], default="fixed",
+    ap.add_argument("--upright-full", type=float, default=UPRIGHT_FULL, help="--pan-mode upright: lean (deg) at which pan reaches 90 (larger = heads tilt toward the camera more)")
+    ap.add_argument("--upright-cap", type=float, default=UPRIGHT_CAP, help="--pan-mode upright: largest pan in deg (45 keeps the yoke arms in view)")
+    ap.add_argument("--pan-mode", choices=["fixed", "lean", "steer", "orient", "upright"], default="fixed",
                     help="fixed: pan 90 deg, tilt = lean; lean: pan swivels with the beam; steer: tilt held near "
                          "--steer-tilt and pan steers the beam (heads look like the source's, yoke arms visible). "
                          "steer disables group fans, which are tilt fans at pan 90; orient: pan and tilt from the lean plus "
@@ -435,6 +455,7 @@ def main():
     ap.add_argument("--group", default="Moving Heads Group",
                     help="model group holding MH-1..MH-8 (fixtures 1-8): uniform fans become group effects")
     ap.add_argument("--no-group", action="store_true", help="orient mode: do not pull each head's pan toward the group's")
+    ap.add_argument("--white", action="store_true", help="force every beam white (the source beams are white; coloured roofline lights next to a beam otherwise tint it)")
     ap.add_argument("--no-fans", action="store_true", help="skip fan detection; per-head effects only")
     ap.add_argument("--fan-banks", help="heads fanned together, left to right, e.g. 4,4 or 6 or 3,3 (default: 4,4 for 8 "
                                         "heads, otherwise every head in one bank)")
@@ -476,9 +497,9 @@ def main():
     fixtures = [int(m.group(1)) for m in nums] if all(nums) else []
     import mh_fan
     banks = (mh_fan.parse_banks(args.fan_banks, nheads) if args.fan_banks else mh_fan.default_banks(nheads))
-    if args.pan_mode in ("steer", "orient") and not args.no_fans:
+    if args.pan_mode in ("steer", "orient", "upright") and not args.no_fans:
         print(f"{args.pan_mode} mode: group fans are tilt fans at pan 90, so they are skipped (per-head effects only)")
-    if not args.no_fans and args.pan_mode not in ("steer", "orient") and banks and len(fixtures) == nheads:
+    if not args.no_fans and args.pan_mode not in ("steer", "orient", "upright") and banks and len(fixtures) == nheads:
         T = np.array([f["t"] for f in frames])
         A = np.array([[h["angle"] if h else np.nan for h in f["heads"]] for f in frames])
         I = np.array([[h["intensity"] / refs[k] if h else np.nan for k, h in enumerate(f["heads"])]
@@ -550,7 +571,7 @@ def main():
             t = r["t"]
             idx_f, toward, yoke_cos = run_features(h, r)  # lens share toward the camera and yoke |cos pan|, smoothed
             group = (group_pan[h][idx_f], group_w[h][idx_f]) if group_pan is not None else None
-            pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward, yoke_cos, group)
+            pan, tilt = pose_from_lean(r["ang"], args.pan_mode, args.pan_gain, toward, yoke_cos, group, args.upright_full, args.upright_cap)
             pose = np.stack([pan, tilt], axis=1)
             idx = douglas_peucker(t, pose, args.tolerance) if len(t) > 2 else [0, len(t) - 1]
             idx = merge_short_segments(t, idx, MIN_SEG_MS)
@@ -558,7 +579,7 @@ def main():
             sel = w >= 0.5 * w.max()
             mean_rgb = (r["rgb"][sel] * w[sel, None]).sum(0) / w[sel].sum()
             hh, ss, _ = colorsys.rgb_to_hsv(*(c / 255 for c in mean_rgb))
-            ss = 0.0 if ss < 0.25 else min(ss, 1.0)
+            ss = 0.0 if (ss < 0.25 or args.white) else min(ss, 1.0)
             for a, b in zip(idx[:-1], idx[1:]):
                 start = snap((t[a] - t0) * 1000)
                 end = snap((t[b] - t0 + (frame_dt if b == idx[-1] and b == len(t) - 1 else 0)) * 1000)
@@ -580,14 +601,15 @@ def main():
         # start angle: the motors have a slew limit, so an unaddressed head would still be
         # swinging when the next beam appears.
         total_ms = snap((frames[-1]["t"] - t0 + frame_dt) * 1000)
-        filled, cursor, prev = [], 0, (PAN, 0.0)
+        pre_ms = UPRIGHT_PRE_MS if args.pan_mode == "upright" else PRE_POSITION_MS
+        filled, cursor, prev = [], 0, ((0.0 if args.pan_mode == "upright" else PAN), 0.0)
         for seg in segs + [(total_ms, total_ms, None, None, None, None, None, None, False)]:
             if seg[0] - cursor >= FRAME_MS:
                 pp, tt = prev if seg[2] is None else (seg[2], seg[4])
                 hsv_gap = seg[6] or (0.0, 0.0, 1.0)
                 link = seg[2] is not None and seg[8]
                 split = seg[0]  # end of the part parked the way the source looks while dark
-                if facing is not None and seg[2] is not None and seg[0] - cursor > PRE_POSITION_MS:
+                if facing is not None and seg[2] is not None and seg[0] - cursor > pre_ms:
                     # orient mode: while dark the head parks the way the source head looks (same lean as the
                     # next beam, turned toward or away from the camera as seen in the gap) ...
                     lens, ffps, yoke = facing
@@ -602,10 +624,16 @@ def main():
                         gpp, gtt = float(gp[0]), float(gt[0])
                     else:  # nothing readable: park at the next beam's own pose (same pan side, no sweep)
                         gpp, gtt = pp, tt
-                    split = seg[0] - PRE_POSITION_MS
+                    split = seg[0] - pre_ms
                     filled.append((cursor, split, gpp, gpp, gtt, gtt, hsv_gap, DARK_DIMMER, False, False))
                     cursor = split
-                # ... and for the last PRE_POSITION_MS (the whole gap when it is shorter) it moves to the next
+                if args.pan_mode == "upright" and seg[0] - cursor > pre_ms:
+                    # upright mode: while dark every head stands straight forward and up (pan 0, tilt 0), as the source
+                    # heads do, and only swings to the next beam's pose for the last UPRIGHT_PRE_MS ...
+                    split = seg[0] - pre_ms
+                    filled.append((cursor, split, 0.0, 0.0, 0.0, 0.0, hsv_gap, DARK_DIMMER, False, False))
+                    cursor = split
+                # ... and for the last pre_ms (the whole gap when it is shorter) it moves to the next
                 # beam's start pose: the motors have a slew limit, so a head still turning when the beam
                 # appears would sweep it through the wrong angles. Mirrors xLights' "Link end position to
                 # next Moving Head effect" (Link flag set so the editor keeps it in step).

@@ -22,18 +22,23 @@ SIZE = (1920, 1058)  # width, height of the MH Preview export with the House Pre
 LENS_X = (409, 554, 695, 1096, 1242, 1390)  # lens centre x of MH-2..MH-7 in that frame (+-15 px)
 LENS_Y = 912  # approximate
 LEANS = (-40.0, -17.0, -6.0, 8.0, 24.0, 42.0)
+LEANS8 = (-46.0, -40.0, -17.0, -6.0, 8.0, 24.0, 42.0, 48.0)  # --heads 8: MH-1..MH-8 for a wider preview
+LENS_X8 = (268, 408, 553, 694, 1095, 1242, 1389, 1532)  # lens centre x of MH-1..MH-8, --heads 8 (+-15 px)
+HEAD_ROW_CROP8 = "crop=1500:110:190:870"  # ffmpeg crop of the MH-1..MH-8 head row
 SHOW = Path("F:/ShowFolderAI")
 HEAD_ROW_CROP = "crop=1100:110:340:870"  # ffmpeg crop of the MH-2..MH-7 head row in a frame of SIZE
 
 
-def write():
+def write(heads=6):
     import prop_test_sequence as pts
     import video_beams_to_xsq as v
     on = "Dimmer: 0.0&comma;1.0&comma;1.0&comma;1.0"
-    pan, tilt = v.steer_pose(np.array(LEANS))
+    leans = LEANS8 if heads == 8 else LEANS
+    first = 1 if heads == 8 else 2
+    pan, tilt = v.steer_pose(np.array(leans))
     plan = pts.Plan()
     for i, (p, t) in enumerate(zip(pan, tilt)):
-        m = f"MH-{i + 2}"
+        m = f"MH-{i + first}"
         plan.add(m, "Moving Head", 0, 3000, v.mh_settings(p, p, t, t, (0.0, 0.0, 1.0), v.DARK_DIMMER, False, False), ["#FFFFFF"])
         plan.add(m, "Moving Head", 3000, 6000, v.mh_settings(p, p, t, t, (0.0, 0.0, 1.0), on, True, False), ["#FFFFFF"])
     out = SHOW / "MH Frame Calibration.xsq"
@@ -41,7 +46,8 @@ def write():
     print(f"wrote {out}; render it with render_clip (0-6000 ms) and run: mh_frame_check.py check VIDEO")
 
 
-def check(video):
+def check(video, heads=6):
+    lens_x = LENS_X8 if heads == 8 else LENS_X
     cap = cv2.VideoCapture(video)
     cap.set(cv2.CAP_PROP_POS_MSEC, 5000)
     ok, f = cap.read()
@@ -59,12 +65,15 @@ def check(video):
     n, _, stats, cent = cv2.connectedComponentsWithStats(lens)
     blobs = sorted((c[0], c[1], s[cv2.CC_STAT_AREA]) for c, s in zip(cent[1:], stats[1:]) if s[cv2.CC_STAT_AREA] > 100)
     xs = [round(b_[0]) for b_ in blobs]
-    print("lit lens centres x:", xs, "| expected:", list(LENS_X))
-    if len(xs) != len(LENS_X):
-        print("MISMATCH: expected", len(LENS_X), "lit lenses (is the MH Preview selected and the sequence rendered 3-6 s?)")
+    print("lit lens centres x:", xs, "| expected:", list(lens_x) if lens_x else "not measured yet")
+    if len(xs) != heads:
+        print("MISMATCH: expected", heads, "lit lenses (is the MH Preview selected and the sequence rendered 3-6 s?)")
         sys.exit(1)
-    off = [a - e for a, e in zip(xs, LENS_X)]
-    scale = (xs[-1] - xs[0]) / (LENS_X[-1] - LENS_X[0])
+    if not lens_x:
+        print(f"8 lenses found: set LENS_X8 = {tuple(xs)} here, then re-run check")
+        return
+    off = [a - e for a, e in zip(xs, lens_x)]
+    scale = (xs[-1] - xs[0]) / (lens_x[-1] - lens_x[0])
     print(f"offsets {off}; scale vs expected {scale:.3f}")
     if (w, h) == SIZE and max(abs(o) for o in off) <= 15 and abs(scale - 1) < 0.02:
         print("OK: the MH Preview framing matches; the head-row crop and comparisons are valid")
@@ -77,8 +86,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["write", "check"])
     ap.add_argument("video", nargs="?")
+    ap.add_argument("--heads", type=int, choices=[6, 8], default=6, help="6 = MH-2..MH-7 (default), 8 = MH-1..MH-8 wide preview")
     a = ap.parse_args()
-    write() if a.cmd == "write" else check(a.video or sys.exit("check needs a VIDEO"))
+    write(a.heads) if a.cmd == "write" else check(a.video or sys.exit("check needs a VIDEO"), a.heads)
 
 
 if __name__ == "__main__":
