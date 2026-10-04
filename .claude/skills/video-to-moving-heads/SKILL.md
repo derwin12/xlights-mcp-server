@@ -94,6 +94,24 @@ Lone gaps up to 0.2 s are detector dropouts and are bridged. Check shimmer by co
 source's (should match 100%). Layering an On effect with Shimmer over the MH effect was tried and does not work on these models: it
 writes every channel, so Brightness kills the beam and Min/Max swing the pan/tilt.
 
+## EasyxLights PRO Display videos (silhouette heads on a roofline; sequences named `EL_<title> vN`)
+Todo list of the channel's PRO videos: `test_videos/PRO_VIDEOS_TODO.md`. Same 8-head rig in every one, but x spacing and the head row's y differ
+per video (1000 vs 1080 high): find the vertical-beam frame, measure beam x, head y = beam bottom + 12 px (1280x720), confirm with a 16 s `--overlay` test.
+- **Analysis**: `--background --max-angle 60 --min-score 8 --cover-level 5 --base-slack 7`. Real beams never exceed ~45 deg; at 85 the lit **roofline outline** is
+  taken for near-horizontal beams (303 false detections in Halloween Is Here). Check the angle histogram: nothing between ~45 and 80 means the cap is safe.
+- **Converter**: `--pan-mode upright --upright-full 20 --upright-cap 45`. Vertical beam = tilt 0, pan 0 (head looks straight up, yoke arms either side, no lens face).
+  Pan takes the lean's sign, tilt stays positive (negative tilt shows the head's back). Dark heads stand at pan 0 / tilt 0 and only move for the last 0.5 s before a beam.
+  `steer` holds tilt 45, which is a head tipped at the camera, not "straight up". Fans are skipped.
+- **Colour**: the source beams are often white; beams cross coloured house outlines, which tinted them (green at 17 s). Use `--white` for white shows. Coloured shows
+  (Addams Family: magenta/red/green): the analysis takes the median lit pixel along the ray (not > 0.5 * max, which keeps only the outline), and the converter
+  snaps each colour to the layout's **colour wheel** (`--palette wheel`, read from MH-1's `DmxColorWheelColorN`). The MH models show only wheel colours, any
+  other hue renders white. Check real colours first: raw pixels of a beam in the source, not the analysis JSON.
+- **Linked effects set only pan and tilt** (`E_CHECKBOX_MHLinkToNext=1`, slot `Pan: ..;Tilt: ..;Heads: 1`): xLights blends the other settings toward the next effect, and a
+  linked effect with an explicit dark `Dimmer` leaked a stray beam (Halloween 60.75 s). Earlier finals made with colour/dimmer in linked effects may have the same leak.
+- **Viewing**: the source heads are ~21/255 on black: brighten the source half (`lutyuv=y='clip(val*10-80,0,255)'`, not for coloured shows) to see the yokes.
+  MH Preview must frame all 8 heads: `mh_frame_check.py write --heads 8`, render, `check VIDEO --heads 8`; head-row crop `crop=1500:110:190:870`.
+- **Package** each approved sequence: `python scripts/package_xsqz.py "EL_Name vN"` -> `F:\ShowFolderAI\packages` (the .xsqz includes the layout, so the colour wheel travels with it).
+
 ## Traps seen so far
 - Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
 - Preview `SlewLimit` is a speed cap on how the head is *drawn* (deg/s per motor; not the DMX values). It was 100 and the source sweeps
