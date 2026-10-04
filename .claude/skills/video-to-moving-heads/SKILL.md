@@ -112,6 +112,16 @@ per video (1000 vs 1080 high): find the vertical-beam frame, measure beam x, hea
   MH Preview must frame all 8 heads: `mh_frame_check.py write --heads 8`, render, `check VIDEO --heads 8`; head-row crop `crop=1500:110:190:870`.
 - **Package** each approved sequence: `python scripts/package_xsqz.py "EL_Name vN"` -> `F:\ShowFolderAI\packages` (the .xsqz includes the layout, so the colour wheel travels with it).
 
+### Measuring the heads and sanity-checking the analysis (EasyxLights videos)
+- **Use `scripts/el_pipeline.py`** (`prep ID SLUG`, `reanalyze SLUG`, `build SLUG "EL_Title v1"`, `side SLUG RENDER.mp4 OUT`). The head finder needs a frame whose 8 beams are
+  vertical: the same x at two heights (150 and 200) within 2 px. A looser test picked a wrong frame twice: Beetlejuice (heads 7 px too wide, outer beams missed) and
+  White Christmas (x 415-620 instead of the real 366-571, whole analysis invalid). Never borrow another video's head x: the rig shifts a few px per video.
+- **Sanity check after every analysis: detection share per head** (frames with a beam / frames). The 8 heads should be close to each other (Beetlejuice outer heads were
+  0.03-0.06 against 0.38 for the inner four = wrong x). A frame from the video at a beam's flash is the proof: heads you see lit must be detected.
+- `--max-angle 70` (pipeline default): real fans reach ~60 deg (White Christmas); the roofline false beams sit at ~84 deg.
+- **Colour wheel**: now white, red, green, blue, magenta, orange, cyan, yellow (slots 0-7; the repeated slots 8-24 are leftovers). Add a colour on the wheel before
+  expecting it to render; the converter reads the wheel from the layout.
+
 ## Traps seen so far
 - Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
 - Preview `SlewLimit` is a speed cap on how the head is *drawn* (deg/s per motor; not the DMX values). It was 100 and the source sweeps

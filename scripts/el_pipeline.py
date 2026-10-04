@@ -18,7 +18,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 VID = ROOT / "test_videos"
 CACHE = Path.home() / ".cache" / "xlights-mcp" / "videos"
-ANALYSIS = ["--background", "--max-angle", "60", "--min-score", "8", "--cover-level", "5", "--base-slack", "7"]
+ANALYSIS = ["--background", "--max-angle", "70", "--min-score", "8", "--cover-level", "5", "--base-slack", "7"]
 UPRIGHT = ["--pan-mode", "upright", "--upright-full", "20", "--upright-cap", "45"]
 
 
@@ -31,14 +31,20 @@ def gray_frame(video, t):
 def find_heads(video):
     dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
                                 str(video)], capture_output=True, text=True).stdout)
-    for t in np.arange(1, dur - 1, 1.0):
+    for t in np.arange(1, dur - 1, 0.5):
         g = gray_frame(video, t)
         if g is None:
             continue
-        xs = np.where(g[200, 300:700] > 35)[0] + 300
-        groups = np.split(xs, np.where(np.diff(xs) > 3)[0] + 1) if len(xs) else []
-        c = [float(x.mean()) for x in groups if len(x)]
-        if len(c) == 8 and np.ptp(np.diff(c)) < 4:
+        rows = []
+        for yy in (150, 200):  # two heights: a vertical beam has the same x at both
+            xs = np.where(g[yy, 300:700] > 35)[0] + 300
+            groups = np.split(xs, np.where(np.diff(xs) > 3)[0] + 1) if len(xs) else []
+            rows.append([float(x.mean()) for x in groups if len(x)])
+        if len(rows[0]) == 8 and len(rows[1]) == 8 and np.abs(np.array(rows[0]) - rows[1]).max() < 2.0:
+            c = rows[1]
+        else:
+            continue
+        if np.ptp(np.diff(c)) < 4:
             bottoms = []
             for x in c:
                 xi, y = int(round(x)), 200
@@ -58,6 +64,17 @@ def prep(vid, slug):
         if not src.exists():
             sys.exit(f"missing {src} (a video with no audio track cannot be sequenced)")
         (VID / f"{slug}.{ext}").write_bytes(src.read_bytes())
+    heads, t = find_heads(VID / f"{slug}.mp4")
+    (VID / f"{slug}_heads.txt").write_text(heads)
+    print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(VID / f"{slug}.mp4"),
+                    str(VID / f"{slug}_beams.json"), "--heads", heads] + ANALYSIS, check=True,
+                   stdout=open(VID / f"{slug}_analysis.log", "w"), stderr=subprocess.STDOUT)
+    print(f"{slug}: analysis done", flush=True)
+
+
+def reanalyze(slug):
+    """Re-measure the heads (strict vertical-beam test) and re-run the beam analysis on a video already in test_videos."""
     heads, t = find_heads(VID / f"{slug}.mp4")
     (VID / f"{slug}_heads.txt").write_text(heads)
     print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
@@ -103,11 +120,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prep"); p.add_argument("vid"); p.add_argument("slug")
+    r = sub.add_parser("reanalyze"); r.add_argument("slug")
     b = sub.add_parser("build"); b.add_argument("slug"); b.add_argument("title")
     s = sub.add_parser("side"); s.add_argument("slug"); s.add_argument("render"); s.add_argument("out")
     a = ap.parse_args()
     if a.cmd == "prep":
         prep(a.vid, a.slug)
+    elif a.cmd == "reanalyze":
+        reanalyze(a.slug)
     elif a.cmd == "build":
         build(a.slug, a.title)
     else:
