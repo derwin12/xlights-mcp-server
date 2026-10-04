@@ -102,11 +102,11 @@ writes every channel, so Brightness kills the beam and Min/Max swing the pan/til
   MH-1 (other models silently unchanged), so layout edits were made in the file with xLights closed, after a backup, and verified by diff.
 - Replica beams start at the lens, which shifts as heads tilt, so measuring replica angles by casting rays from fixed head positions is
   unreliable in dense fans; judge by eye (head bodies and beams).
-- **Sharing / importing**: write per-head effects as slot 1 with `Heads: 1` (`mh_settings`; the complete key set from `mh_effect_settings` is harmless
-  but not needed, xLights itself drops default-valued keys). A package built from the generated file (`.xsqz` = zip of `xlights_rgbeffects.xml`,
-  `xlights_networks.xml`, the `.xsq` with a bare `mediaFile` name, and the mp3; see `F:\ShowFolderAI\packages`) imported with MH-2 -> MH-1 and
-  MH-7 -> MH-8 rendered with no clicks (verified by the user 2026-10-03). Do NOT build a package from a sequence that xLights has re-saved: loading
-  a 2025.13 file makes xLights move each slot to its fixture number (`MH2_Settings`, `Heads: 2`) and stamp 2026.18, and that form was reported to
-  need a click per effect after import. Rendering a sequence with `render_clip` re-saves it this way, so package the file from before any render, or
-  regenerate it.
+- **Sharing / importing**: every effect must carry the complete xLights Moving Head key set (`mh_effect_settings`: the layer blend `T_CHOICE_LayerMethod`,
+  `T_SLIDER_EffectLayerMix`, `T_CHECKBOX_LayerMorph`, the shutter/pattern keys and the MH1-8 slots). Generated files used to leave 22 of them out;
+  a package of such a file (xLights re-saves it with the slot moved to the head's own number but does NOT add the missing keys) imported with MH-2 -> MH-1
+  and MH-7 -> MH-8 needed a click on every effect. The same sequence regenerated with the full key set imports with no clicks, whether the package is
+  built from the generated file (`.xsqz` = zip of `xlights_rgbeffects.xml`, `xlights_networks.xml`, the `.xsq` with a bare `mediaFile` name and the mp3;
+  see `F:\ShowFolderAI\packages`) or packaged by xLights after a render (verified by the user 2026-10-03). The slot form (slot 1 / `Heads: 1` as
+  generated, or slot n as xLights re-saves it) does not matter. Never drop keys from `mh_effect_settings` to "match what xLights saves".
 - `git status` shows unrelated files (CLAUDE.md, other scripts): stage only your own.
