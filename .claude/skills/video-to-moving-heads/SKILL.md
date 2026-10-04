@@ -116,7 +116,7 @@ per video (1000 vs 1080 high): find the vertical-beam frame, measure beam x, hea
 - Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
 - Preview `SlewLimit` is a speed cap on how the head is *drawn* (deg/s per motor; not the DMX values). It was 100 and the source sweeps
   reach ~185 deg/s, so fast moves lagged in renders; on 2026-10-03 the user's layout was changed to 250 for all 16 motors (backups in
-  `archive_beam_work\layout_backups`). Do not change it again without asking. xLights' `setModelProperty` automation call only worked for
+  `archive_beam_work\layout_backups`). Do not change it again without asking. **2026-10-04: the user set it to 0 (no limit) on all 16 motors** (`PanMotor`/`TiltMotor` `SlewLimit` in the layout; backup in `layout_backups`, `before_slew0`), because 250 left the render ~0.2 s behind very fast sequences (Jingle Bell Rock 73 s); with 0 it tracks the source frame by frame. xLights' `setModelProperty` automation call only worked for
   MH-1 (other models silently unchanged), so layout edits were made in the file with xLights closed, after a backup, and verified by diff.
 - Replica beams start at the lens, which shifts as heads tilt, so measuring replica angles by casting rays from fixed head positions is
   unreliable in dense fans; judge by eye (head bodies and beams).
