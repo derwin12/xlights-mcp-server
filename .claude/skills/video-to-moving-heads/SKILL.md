@@ -122,6 +122,20 @@ per video (1000 vs 1080 high): find the vertical-beam frame, measure beam x, hea
 - **Colour wheel**: now white, red, green, blue, magenta, orange, cyan, yellow (slots 0-7; the repeated slots 8-24 are leftovers). Add a colour on the wheel before
   expecting it to render; the converter reads the wheel from the layout.
 
+### More head-finding cases, y tuning, ground-truth scoring (2026-10-04)
+- **No frame with 8 vertical beams** (beams rarely all lit, or never vertical): `el_pipeline.py` falls back to clustering the x of every tall beam over the whole
+  video and fitting an even spacing (a head that never fires is filled in). If the beams are never vertical (Billie Eilish), fit an even 8-head grid to the head
+  silhouettes in a median of several dark frames and pass the x list: `el_pipeline.py reanalyze SLUG --xs x1,...,x8 --bottom N`.
+- **Tune the head y per video** (`tune_y` runs 13 y values on a 3 s fan window and picks the best): with strongly leaning beams a ~10 px y error shifts the expected
+  ray sideways past the detector tolerance and the outer heads of a fan vanish (Wrap Me Up 27 s).
+- **Converter fixes**: whole beam runs down to 50 ms are kept (`MIN_RUN_MS`; strobe/chase flashes were dropped by the 100 ms rule); dim frames with a faint tint
+  count as white (`DIM_V`/`DIM_SAT`; a fade-in frame made stray green flashes).
+- **Render one clip at a time** (`render_clip` calls started together timed out after 30 min) and make sure only ONE xLights is running (a second instance steals the automation port).
+- **PPD (Pixel Pro Displays) videos** use the 6-head rig (426..666 step 48, y 180 at 1280x720; models MH-2..MH-7), `--pan-mode orient --facing`, names `PPD_<title> vN`.
+- **Ground truth**: when a vendor MH sequence of DMX effects exists, `vendor_dmx_decode.py` decodes it (ch 9 pan, 11 tilt, 1 dimmer, "MH Intensity" sub-layer = lit;
+  layer 1 is the baseline, layer 0 on top) and `compare_to_vendor.py` scores a conversion. Geometry: pan = DMX*540/255, tilt = DMX*220/255 - 110, beam = (sin t sin p, cos t,
+  sin t cos p); the vendor motors slew at 120 deg/s. Livingston Shadow: lit F1 0.948, screen lean median 1.95 deg, 3D direction median 7.3 deg (depth is the weak part).
+
 ## Traps seen so far
 - Dropping short path segments left holes that the dark gap-fill turned into flicker; the converter now merges them.
 - Preview `SlewLimit` is a speed cap on how the head is *drawn* (deg/s per motor; not the DMX values). It was 100 and the source sweeps

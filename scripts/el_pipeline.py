@@ -173,10 +173,15 @@ def prep(vid, slug):
     print(f"{slug}: analysis done", flush=True)
 
 
-def reanalyze(slug):
-    """Re-measure the heads (strict vertical-beam test) and re-run the beam analysis on a video already in test_videos."""
-    heads, t = locate_heads(VID / f"{slug}.mp4")
-    heads = tune_y(VID / f"{slug}.mp4", heads, locate_heads.bottom)
+def reanalyze(slug, xs=None, bottom=238):
+    """Re-measure the heads (strict vertical-beam test) and re-run the beam analysis on a video already in test_videos.
+    xs = "x1,...,x8" gives the head x positions by hand (a video whose beams are never vertical); y is tuned around `bottom`."""
+    if xs:
+        heads, t = ";".join(f"{int(round(float(x)))},{bottom + 12}" for x in xs.split(",")), -1
+        heads = tune_y(VID / f"{slug}.mp4", heads, bottom)
+    else:
+        heads, t = locate_heads(VID / f"{slug}.mp4")
+        heads = tune_y(VID / f"{slug}.mp4", heads, locate_heads.bottom)
     (VID / f"{slug}_heads.txt").write_text(heads)
     print(f"{slug}: heads {heads} (found at {t:.0f} s)", flush=True)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "video_beam_analysis.py"), str(VID / f"{slug}.mp4"),
@@ -221,14 +226,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prep"); p.add_argument("vid"); p.add_argument("slug")
-    r = sub.add_parser("reanalyze"); r.add_argument("slug")
+    r = sub.add_parser("reanalyze"); r.add_argument("slug"); r.add_argument("--xs"); r.add_argument("--bottom", type=int, default=238)
     b = sub.add_parser("build"); b.add_argument("slug"); b.add_argument("title")
     s = sub.add_parser("side"); s.add_argument("slug"); s.add_argument("render"); s.add_argument("out")
     a = ap.parse_args()
     if a.cmd == "prep":
         prep(a.vid, a.slug)
     elif a.cmd == "reanalyze":
-        reanalyze(a.slug)
+        reanalyze(a.slug, a.xs, a.bottom)
     elif a.cmd == "build":
         build(a.slug, a.title)
     else:
