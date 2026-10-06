@@ -23,32 +23,6 @@ A `token-counter` MCP is available for tracking live token usage.
 - To show running session cost: `get_session_stats()`
 - To log completed task: `log_usage({input_tokens: N, output_tokens: N, description: "task"})`
 
-## Rules
-
-- Do NOT use `rg`, `grep`, or bash file exploration before calling `graph_continue` (when required).
-- Do NOT do broad/recursive exploration at any confidence level.
-- `max_supplementary_greps` and `max_supplementary_files` are hard caps  -  never exceed them.
-- Do NOT call `graph_continue` more than once per turn.
-- Always use `file::symbol` notation with `graph_read`  -  never bare filenames.
-- After edits, call `graph_register_edit` with changed files using `file::symbol` notation.
-
-## Context Store
-
-Whenever you make a decision, identify a task, note a next step, fact, or blocker during a conversation, append it to `.dual-graph/context-store.json`.
-
-**Entry format:**
-```json
-{"type": "decision|task|next|fact|blocker", "content": "one sentence max 15 words", "tags": ["topic"], "files": ["relevant/file.ts"], "date": "YYYY-MM-DD"}
-```
-
-**To append:** Read the file -> add the new entry to the array -> Write it back -> call `graph_register_edit` on `.dual-graph/context-store.json`.
-
-**Rules:**
-- Only log things worth remembering across sessions (not every minor detail)
-- `content` must be under 15 words
-- `files` lists the files this decision/task relates to (can be empty)
-- Log immediately when the item arises  -  not at session end
-
 ## After Adding MCP Tools
 
 Whenever a new `@mcp.tool()` is added to `src/xlights_mcp/server.py`, run:
