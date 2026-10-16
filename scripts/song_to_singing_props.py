@@ -4,9 +4,8 @@ Usage:
     python scripts/song_to_singing_props.py --audio song.mp3 --words words.json \
         --show F:/ShowFolderAI --out "Song.xsq" [--cues cues.json]
 
-    words.json is faster-whisper output (WhisperModel("small.en"), transcribe(...,
-    word_timestamps=True) on a 16 kHz mono wav): a list of
-    {start, end, text, words: [{w, s, e, p}]} phrases.
+    words.json comes from scripts/transcribe_words.py (faster-whisper, word timestamps):
+    a list of {start, end, text, words: [{w, s, e, p}]} phrases.
     Needs: pip install faster-whisper cmudict librosa
 
 Pipeline: word timestamps -> CMUdict phonemes -> xLights phoneme codes ->
