@@ -2,7 +2,7 @@
 
 Usage:
     python scripts/song_to_singing_props.py --audio song.mp3 --words words.json \
-        --show F:/ShowFolderAI --out "Song.xsq" [--cues cues.json]
+        --show F:/ShowFolderAI --out "Song.xsq" [--cues cues.json] [--layout-effects]
 
     words.json comes from scripts/transcribe_words.py (faster-whisper, word timestamps):
     a list of {start, end, text, words: [{w, s, e, p}]} phrases.
@@ -17,6 +17,11 @@ phrases into low / high. Low phrases go to the male tree, high phrases to the
 female tree; both bulbs sing every phrase. Override per phrase with --cues, a
 JSON list of [start_seconds, "male"|"female"|"all"] entries; a cue applies from
 its start time until the next cue.
+
+--layout-effects also sequences the rest of the layout from the beat map: a
+Single Strand chase on the "House Outline" group (one per bar, direction
+alternating, palette changing every 8 bars) and a VU Meter on the "Trees" group
+(Spectrogram / Volume Bars alternating every 16 bars, one meter per tree).
 """
 
 from __future__ import annotations
@@ -38,6 +43,15 @@ from xlights_mcp.xlights.xsq_writer import (
     TimingTrackLabel,
     write_xsq,
 )
+
+OUTLINE_GROUP = "House Outline"
+TREES_GROUP = "Trees"
+BAR_PALETTES = [
+    ["#FF0000", "#00FF00"],
+    ["#FFFFFF", "#0000FF"],
+    ["#FFB800", "#FF0000"],
+    ["#00FF00", "#FFFFFF"],
+]
 
 # (model name, face definition, which phrases it sings)
 PROPS = [
@@ -143,6 +157,52 @@ def build_tracks(phrases: list[dict], voices: list[str], who: str) -> TimingTrac
     return TimingTrack(name="", labels=[ph_l, wd_l, pn_l])
 
 
+def layout_effects(beats, duration_ms: int, groups: set[str]) -> list[EffectPlacement]:
+    """House Outline chase (per bar) and Trees VU meter (per 16 bars) from a BeatMap."""
+    bars = [int(t * 1000) for t in beats.downbeat_times]
+    if len(bars) < 2:
+        return []
+    bars.append(min(duration_ms, bars[-1] + (bars[-1] - bars[-2])))
+    out: list[EffectPlacement] = []
+
+    if OUTLINE_GROUP in groups:
+        for i in range(len(bars) - 1):
+            pal = BAR_PALETTES[(i // 8) % len(BAR_PALETTES)]
+            out.append(EffectPlacement(
+                model_name=OUTLINE_GROUP, effect_name="SingleStrand",
+                start_time_ms=bars[i], end_time_ms=bars[i + 1],
+                palette=ColorPalette(colors=pal, active_colors=[1, 2]),
+                settings={
+                    "B_CHOICE_BufferStyle": "Per Model Single Line",
+                    "E_CHECKBOX_Chase_Group_All": "0",
+                    "E_CHOICE_Chase_Type1": "Left-Right" if i % 2 == 0 else "Right-Left",
+                    "E_CHOICE_Fade_Type": "From Head",
+                    "E_CHOICE_SingleStrand_Colors": "Palette",
+                    "E_NOTEBOOK_SSEFFECT_TYPE": "Chase",
+                    "E_SLIDER_Color_Mix1": "40", "E_SLIDER_Number_Chases": "1",
+                    "E_TEXTCTRL_Chase_Offset": "0.0", "E_TEXTCTRL_Chase_Rotations": "1.0",
+                },
+            ))
+
+    if TREES_GROUP in groups:
+        for blk, start in enumerate(range(0, len(bars) - 1, 16)):
+            end = bars[min(start + 16, len(bars) - 1)]
+            pal = BAR_PALETTES[blk % len(BAR_PALETTES)]
+            out.append(EffectPlacement(
+                model_name=TREES_GROUP, effect_name="VU Meter",
+                start_time_ms=bars[start], end_time_ms=end,
+                palette=ColorPalette(colors=pal, active_colors=[1, 2]),
+                settings={
+                    "B_CHOICE_BufferStyle": "Per Model Default",
+                    "E_CHECKBOX_Regex": "0",
+                    "E_CHOICE_VUMeter_Type": "Spectrogram" if blk % 2 == 0 else "Volume Bars",
+                    "E_SLIDER_VUMeter_Bars": "8", "E_SLIDER_VUMeter_Gain": "0",
+                    "E_SLIDER_VUMeter_Sensitivity": "70", "E_TEXTCTRL_Filter": "",
+                },
+            ))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--audio", required=True)
@@ -152,6 +212,8 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--title", default="")
     ap.add_argument("--cues")
+    ap.add_argument("--layout-effects", action="store_true",
+                    help="also add a House Outline chase and Trees VU meter from the beat map")
     args = ap.parse_args()
 
     phrases = [p for p in json.load(open(args.words, encoding="utf-8")) if p["words"]]
@@ -194,6 +256,17 @@ def main() -> None:
                 "T_SLIDER_EffectLayerMix": "0",
             },
         ))
+    if args.layout_effects:
+        from xlights_mcp.audio.beats import detect_beats
+
+        beats = detect_beats(Path(args.wav16k or args.audio))
+        group_names = {g.name for g in show.model_groups}
+        extra = layout_effects(beats, duration_ms, group_names)
+        spec.effects.extend(extra)
+        print(f"layout effects: {len(extra)} ({beats.tempo:.0f} BPM, {len(beats.downbeat_times)} bars)")
+        for g in (OUTLINE_GROUP, TREES_GROUP):
+            if g not in group_names:
+                print("skip (group not in show):", g)
     out = write_xsq(spec, show, Path(args.out))
     print("wrote", out)
 
