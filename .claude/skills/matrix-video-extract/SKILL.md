@@ -24,10 +24,19 @@ python scripts/matrix_video_extract.py IN.mp4 OUT.mp4 --auto --cols 50 --rows 24
 - Verify: ffprobe duration vs source, and a side-by-side frame (source crop vs output scaled with `flags=neighbor`).
 - To watch: `Start-Process <file>` in PowerShell (native 50x24 plays tiny; open the 800x384 one).
 
+## Batch
+`python scripts/matrix_batch.py CSV OUT_DIR WORK_DIR [--limit N]` runs every `todo` row of the CSV: downloads the preview, runs the
+extractor with `--auto --agg max --scale 16 --filter neighbor --native`, checks length vs source and that the output isn't black,
+updates the CSV (`done` / `failed` + note) and deletes the download. A failure never stops the batch; rerun after fixing by
+setting `failed` rows back to `todo`. Run it in the background (about 2-3 minutes per video).
+
+Detection handles (learned the hard way): faint 1px compression slivers (ignored), a neighbouring P10 matrix's edge (dropped by
+choosing the best window of exactly 50 positions), dark columns that never light, and videos that crop the matrix at the frame
+edge (missing columns are extrapolated and sampled as black; the CSV note says how many).
+
 ## Source list and progress
 `F:\ShowFolderAI\Videos\pixelpro-matrix-sequences.csv`: the 45 Pixel Pro Displays sequences with "matrix" in the name, filtered
-from `https://xlights.info/search?query=Pixel%20Pro%20Displays` (a server-rendered table; the product page of each links its
-YouTube preview). Columns include `status` (done/todo), `output_prefix`, `note`. **5 done, 40 todo.** Output goes in
-`F:\ShowFolderAI\Videos\`.
-These are the vendor's paid-sequence previews: the user said they have the videos and chose to proceed, but confirm they own
-or may use a sequence before running a big batch of them.
+from `https://xlights.info/search?query=Pixel%20Pro%20Displays` (a server-rendered table; each product page links its YouTube
+preview). Columns include `status`, `output_prefix`, `note`. **Result (2026-10-17): 44 done, 1 skipped** - `Chris Tomlin ... Noel` is
+a whole-house preview where the matrix is a small scene element, not the two-matrix layout. Outputs (native 50x24 + 800x384 per
+song, ~1.6 GB total) are in `F:\ShowFolderAI\Videos\`. The user confirmed they own/may use these sequences.

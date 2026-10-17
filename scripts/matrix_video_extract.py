@@ -28,21 +28,61 @@ def detect_grid(src: str, w: int, h: int, cols: int, rows: int) -> tuple[tuple[f
          "-f", "rawvideo", "-"])
     mx = np.frombuffer(raw, np.uint8).reshape(-1, y1 - y0, x1).max(axis=0).astype(float)
 
-    def axis(profile: np.ndarray, n: int) -> tuple[float, float]:
-        """First/last LED centre along one axis = the outermost lit dots. Columns/rows that never light up in between
-        are fine; the span must match n positions at the typical dot pitch."""
+    def axis(profile: np.ndarray, n: int, name: str) -> tuple[float, float, float, float]:
+        """First/last LED centre along one axis = the outer dots of the longest regular dot chain (the P10 matrix's edge
+        and other stray bright bits form short chains). Dark columns/rows inside are fine. If the chain is shorter than n
+        positions but touches the frame edge, the matrix is cropped by the video: the missing outer positions are
+        extrapolated (they'll be sampled as black)."""
         idx = np.where(profile > 0.25 * profile.max())[0]
-        c = np.array([g.mean() for g in np.split(idx, np.where(np.diff(idx) > 1)[0] + 1)])
+        c = np.array([g.mean() for g in np.split(idx, np.where(np.diff(idx) > 1)[0] + 1) if len(g) >= 2])  # >=2 px wide: LEDs, not 1px compression slivers
         d = np.diff(c)
-        typical = float(np.median(d[d < 1.5 * np.percentile(d, 25)]))
-        pitch = (c[-1] - c[0]) / (n - 1)
-        if abs(pitch - typical) > 0.04 * typical:
-            raise SystemExit(f"grid detection: span gives pitch {pitch:.2f} but dots are {typical:.2f} apart "
-                             f"(outer dots may never light, or n={n} is wrong)")
-        return float(c[0]), float(c[-1])
+        vals, counts = np.unique(np.round(d[d >= 3] * 2) / 2, return_counts=True)
+        mode = float(vals[counts.argmax()])
+        near = d[(d > 0.85 * mode) & (d < 1.15 * mode)]
+        typical = float(np.mean(near))        # mean, not median: peak centres are quantised to half pixels
+        merged = [[c[0]]]                      # peaks closer than ~half a pitch are one dot split by a dim gap
+        for v in c[1:]:
+            if v - merged[-1][-1] < 0.6 * typical:
+                merged[-1].append(v)
+            else:
+                merged.append([v])
+        c = np.array([np.mean(g) for g in merged])
+        chains, cur = [], [c[0]]
+        for prev, nxt in zip(c, c[1:]):
+            if nxt - prev <= 3.2 * typical:
+                cur.append(nxt)
+            else:
+                chains.append(cur)
+                cur = [nxt]
+        chains.append(cur)
+        ch = max(chains, key=lambda x: x[-1] - x[0])
+        span = ch[-1] - ch[0]
+        k = int(round(span / typical)) + 1
+        pitch = span / (k - 1)
+        first, last = float(ch[0]), float(ch[-1])
+        vis = (first, last)
+        if k < n:
+            missing = n - k
+            if first < typical:                      # cropped at the start edge
+                first = last - (n - 1) * pitch
+                print(f"note: {name}: {missing} positions are off-frame at the start (sampled as black)")
+            else:
+                raise SystemExit(f"grid detection ({name}): only {k} positions of {n} found and the matrix is not at the frame edge")
+        elif k > n:
+            # extra peaks at the ends (a neighbouring matrix's edge, stray artefacts): keep the window of n grid
+            # positions that holds the most peaks
+            gi = np.round((np.array(ch) - ch[0]) / pitch).astype(int)
+            best = max(range(k - n + 1), key=lambda s: int(((gi >= s) & (gi <= s + n - 1)).sum()))
+            win = [v for v, g in zip(ch, gi) if best <= g <= best + n - 1]
+            if int(round((win[-1] - win[0]) / pitch)) + 1 != n:
+                raise SystemExit(f"grid detection ({name}): {k} positions found, expected {n}")
+            first, last = float(win[0]), float(win[-1])
+            vis = (first, last)
+        return first, last, vis[0], vis[1]
 
-    fx, lx = axis(mx.max(axis=0), cols)
-    fy, ly = axis(mx.max(axis=1), rows)
+    fx, lx, vlo, vhi = axis(mx.max(axis=0), cols, "columns")
+    # rows from the matrix's own columns only, so the P10 matrix beside it can't add peaks
+    fy, ly, _, _ = axis(mx[:, max(int(vlo) - 3, 0):int(vhi) + 4].max(axis=1), rows, "rows")
     return (fx, fy + y0), lx, ly + y0
 
 
@@ -87,6 +127,7 @@ def main() -> None:
     x1, y1 = min(int(xs[-1]) + 21, w), min(int(ys[-1]) + 21, h)
     cw, ch = (x1 - x0) // 2 * 2, (y1 - y0) // 2 * 2
     xs, ys = xs - x0, ys - y0
+    valid_x, valid_y = (xs >= 0) & (xs < cw), (ys >= 0) & (ys < ch)   # LEDs outside the frame stay black
 
     dec = subprocess.Popen(
         ["ffmpeg", "-v", "error", "-i", args.src, "-vf", f"crop={cw}:{ch}:{x0}:{y0},format=rgb24",
@@ -115,6 +156,8 @@ def main() -> None:
                 acc = np.maximum(acc, v) if args.agg == "max" else acc + v
         if args.agg == "mean":
             acc //= (2 * p + 1) ** 2
+        acc[:, ~valid_x] = 0
+        acc[~valid_y, :] = 0
         enc.stdin.write(acc.astype(np.uint8).tobytes())
         n += 1
     enc.stdin.close()
