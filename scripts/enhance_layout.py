@@ -12,6 +12,7 @@ Re-running restores nothing by itself: copy SEQ.xsq.bak over SEQ.xsq first (the 
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import shutil
 import xml.etree.ElementTree as ET
@@ -49,7 +50,7 @@ PALETTES = {
     },
 }
 ROLE = {"House Outline": "outline", "Trees": "trees", "Arches": "arches", "Stars": "stars",
-        "Mega Topper": "topper", "Mega Tree": "megatree", "Icicles": "icicles", "FloodLights": "flood"}
+        "Mega Topper": "topper", "Mega Tree": "megatree", "Trees Stars": "trees", "Icicles": "icicles", "FloodLights": "flood"}
 
 CHASE = ("B_CHOICE_BufferStyle=Per Model Single Line,E_CHECKBOX_Chase_Group_All=0,"
          "E_CHOICE_Chase_Type1={d},E_CHOICE_Fade_Type=From Head,E_CHOICE_SingleStrand_Colors=Palette,"
@@ -67,11 +68,62 @@ SHOCK = ("E_CHECKBOX_Shockwave_Blend_Edges=1,E_CHECKBOX_Shockwave_Scale=1,E_CHOI
          "E_SLIDER_Shockwave_End_Width=40,E_SLIDER_Shockwave_Start_Radius=1,E_SLIDER_Shockwave_Start_Width=0,"
          "T_CHECKBOX_Canvas=0,T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,T_SLIDER_EffectLayerMix=0,"
          "T_TEXTCTRL_Fadeout=0.2")
-# Aurora colour mode 1 paints its R/G/B ribbons with palette colours 1/2/3 (the "color mask")
-AURORA = ("E_0FILEPICKERCTRL_IFS=F:/ShowFolderAI/Shaders/Aurora.fs,E_CHOICE_SHADERXYZZY_uColMode=Alternate Color Palette (3 used) ,"
-          "E_CHECKBOX_SHADERXYZZY_uContRot=1,E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uZoom=100,"
-          "E_SLIDER_SHADERXYZZY_uRotate=0,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,"
-          "E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0,T_TEXTCTRL_Fadein=0.5,T_TEXTCTRL_Fadeout=0.5")
+FADE = "T_TEXTCTRL_Fadein=0.5,T_TEXTCTRL_Fadeout=0.5"
+_SPD = "E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0"
+# Mega Tree shaders. Settings are copied from the user's own sequences (Sequences/*.xsqz, most common Mega Tree
+# variant) minus the layer-blend method; Audio - PlasmaLike had no uses so it gets defaults. Aurora's colour mode 1
+# and Spiral Over Beams' paint their ribbons with palette colours 1/2/3 (the "color mask"); the rest are fixed-colour
+# and are recoloured by the Average-blend On tint layer on top.
+SHADERS = {
+    "Aurora": ("E_CHOICE_SHADERXYZZY_uColMode=Alternate Color Palette (3 used) ,E_CHECKBOX_SHADERXYZZY_uContRot=1,"
+               "E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uZoom=100,E_SLIDER_SHADERXYZZY_uRotate=0,"
+               "E_SLIDER_Shader_Speed=100," + _SPD),
+    "Vortex V2": ("B_CHOICE_BufferStyle=Per Preview,E_SLIDER_SHADERXYZZY_ColorB=0,E_SLIDER_SHADERXYZZY_ColorG=0,"
+                  "E_SLIDER_SHADERXYZZY_Filling=296,E_SLIDER_SHADERXYZZY_Half=0,E_SLIDER_SHADERXYZZY_Rotation=50,"
+                  "E_SLIDER_SHADERXYZZY_Stripe=2900,E_SLIDER_Shader_Speed=302,E_TEXTCTRL_Shader_LeadIn=0,"
+                  "E_TEXTCTRL_Shader_Offset_X=100,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=100"),
+    "Black Cherry Cosmos": ("E_SLIDER_SHADERXYZZY_mouseX=0,E_SLIDER_SHADERXYZZY_mouseY=0,E_SLIDER_Shader_Speed=100,"
+                            "E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,"
+                            "E_TEXTCTRL_Shader_Zoom=68"),
+    "Continua Variation": ("E_SLIDER_Shader_Speed=500,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,"
+                           "E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=-20,T_CHECKBOX_Canvas=1"),
+    "Spiral Over Beams": ("E_CHOICE_SHADERXYZZY_uColMode=Alternate Color Palette (3 used) ,E_SLIDER_SHADERXYZZY_uCore=26,"
+                          "E_SLIDER_SHADERXYZZY_uIntensity=64,E_SLIDER_SHADERXYZZY_uOffsetX=0,E_SLIDER_SHADERXYZZY_uOffsetY=0,"
+                          "E_SLIDER_SHADERXYZZY_uZoom=861,E_SLIDER_Shader_Speed=52,E_TEXTCTRL_Shader_LeadIn=0,"
+                          "E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=100,E_TEXTCTRL_Shader_Zoom=5"),
+    "Blue Streaks": ("B_CHOICE_BufferStyle=Per Preview,B_CHOICE_BufferTransform=Flip Horizontal,B_CHOICE_PerPreviewCamera=2D,"
+                     "E_CHECKBOX_SHADERXYZZY_uContRot=1,E_CHOICE_SHADERXYZZY_uColMode=Shader Defaults ,"
+                     "E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uOffsetX=0,E_SLIDER_SHADERXYZZY_uOffsetY=0,"
+                     "E_SLIDER_SHADERXYZZY_uRotate=737,E_SLIDER_SHADERXYZZY_uZoom=500,E_SLIDER_Shader_Speed=100," + _SPD),
+    "Fly Through": ("E_SLIDER_SHADERXYZZY_c0=0,E_SLIDER_SHADERXYZZY_c1=0,E_SLIDER_SHADERXYZZY_c2=0,E_SLIDER_SHADERXYZZY_j=50,"
+                    "E_SLIDER_SHADERXYZZY_k=50,E_SLIDER_Shader_Speed=300," + _SPD),
+    "Hex Vortex": ("E_SLIDER_SHADERXYZZY_B=25,E_SLIDER_SHADERXYZZY_G=12,E_SLIDER_SHADERXYZZY_R=5,E_SLIDER_SHADERXYZZY_centerX=50,"
+                   "E_SLIDER_SHADERXYZZY_centerY=50,E_SLIDER_SHADERXYZZY_rotation=5,E_SLIDER_SHADERXYZZY_shapeX=200,"
+                   "E_SLIDER_SHADERXYZZY_shapeY=225,E_SLIDER_SHADERXYZZY_speed=50,E_SLIDER_Shader_Speed=100," + _SPD),
+    "InnerDimensionalMatrix": ("E_CHECKBOX_SHADERXYZZY_color=1,E_CHECKBOX_SHADERXYZZY_mirror=0,E_SLIDER_SHADERXYZZY_cycle=100,"
+                               "E_SLIDER_SHADERXYZZY_flash=750,E_SLIDER_SHADERXYZZY_line=1,E_SLIDER_SHADERXYZZY_rate=100,"
+                               "E_SLIDER_SHADERXYZZY_scale=100,E_SLIDER_SHADERXYZZY_seed1=15500,E_SLIDER_SHADERXYZZY_seed2=64900,"
+                               "E_SLIDER_SHADERXYZZY_zoom=17,E_SLIDER_Shader_Speed=100," + _SPD),
+    "Audio - PlasmaLike": "E_SLIDER_Shader_Speed=100," + _SPD,
+}
+# shader rotation per section story; consecutive sections of a story step through its list
+SHADER_PICK = {
+    "verse": ["Continua Variation", "Fly Through", "Aurora"],
+    "chorusA": ["Vortex V2", "Hex Vortex"],
+    "chorusB": ["Spiral Over Beams", "Blue Streaks", "Audio - PlasmaLike"],
+    "peak": ["Black Cherry Cosmos", "InnerDimensionalMatrix"],
+    "outro": ["Aurora", "Continua Variation"],
+}
+
+
+def shader_settings(name: str, shader_dir: str) -> str:
+    return f"E_0FILEPICKERCTRL_IFS={shader_dir}/{name}.fs,{SHADERS[name]},{FADE}"
+
+
+PINWHEEL = ("E_CHECKBOX_Pinwheel_Rotation=0,E_CHOICE_Pinwheel_3D=3D Inverted,E_CHOICE_Pinwheel_Style=New Render Method,"
+            "E_SLIDER_PinwheelXC=0,E_SLIDER_PinwheelYC=0,E_SLIDER_Pinwheel_ArmSize=100,E_SLIDER_Pinwheel_Arms=2,"
+            "E_SLIDER_Pinwheel_Offset=0,E_SLIDER_Pinwheel_Speed=10,E_SLIDER_Pinwheel_Thickness=30,E_SLIDER_Pinwheel_Twist=0,"
+            "T_CHECKBOX_Canvas=0,T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,T_SLIDER_EffectLayerMix=0")
 ON_TINT = ("E_CHECKBOX_On_Shimmer=0,E_TEXTCTRL_Eff_On_End=100,E_TEXTCTRL_Eff_On_Start=100,E_TEXTCTRL_On_Cycles=1.0,"
            "T_CHECKBOX_Canvas=0,T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Average,T_SLIDER_EffectLayerMix=0")
 ON = "E_TEXTCTRL_Eff_On_Start=100,E_TEXTCTRL_Eff_On_End=100,E_CHECKBOX_On_Shimmer=0,E_TEXTCTRL_On_Cycles=1.0"
@@ -196,6 +248,7 @@ def main() -> None:
     if not bak.exists():
         shutil.copy2(xsq, bak)
     sq = Seq(xsq)
+    shader_dir = (xsq.parent / "Shaders").resolve().as_posix()
 
     def sec_at(t):
         for s in secs:
@@ -233,7 +286,7 @@ def main() -> None:
             chunk = idx[k:k + 16]
             tree_blocks.append((chunk[0], chunk[-1], bar_pal[chunk[0]]))
     for blk, (b0, b1, pk) in enumerate(tree_blocks):
-        sq.add("Trees", 0, "VU Meter", bars[b0], bars[b1 + 1],
+        sq.add("Trees", 1, "VU Meter", bars[b0], bars[b1 + 1],
                VU.format(t="Spectrogram" if blk % 2 == 0 else "Volume Bars"), pk)
     # Arches: chase every other bar (layer 1), Ripple on first bar of each section (layer 0, top)
     for i in range(0, n, 2):
@@ -249,11 +302,51 @@ def main() -> None:
         pk = "peak" if bar_peak[i] else bar_pal[i]
         end = min(bars[i] + 450, bars[i + 1])
         for m in ("Stars", "Mega Topper"):
-            sq.add(m, 0, "Shockwave", bars[i], end, SHOCK.format(r=160 if bar_peak[i] else 100), pk)
+            shock = SHOCK.format(r=160 if bar_peak[i] else 100)
+            if m == "Stars":  # group: each star gets its own shockwave rather than one across the group
+                shock = "B_CHOICE_BufferStyle=Per Model Default," + shock
+            sq.add(m, 0, "Shockwave", bars[i], end, shock, pk)
+    # Mini trees and their tops ping-pong in chorus bars: Trees on beats 1 and 3, Trees Stars on beats 2 and 4
+    for i in range(n):
+        if bar_kind[i] != "chorus":
+            continue
+        q = [bars[i] + (bars[i + 1] - bars[i]) * k // 4 for k in range(5)]
+        r = 160 if bar_peak[i] else 100
+        shock = "B_CHOICE_BufferStyle=Per Model Default," + SHOCK.format(r=r)
+        for k in range(4):
+            model = "Trees" if k % 2 == 0 else "Trees Stars"
+            sq.add(model, 0, "Shockwave", q[k], min(q[k] + 450, q[k + 1]), shock, bar_pal[i])
+    # Trees Stars are lit all song: slow Ripple per bar outside choruses (layer 1), Pinwheel under each chorus run
+    # (layer 2), and a full-size Shockwave on the first beat of every section (layer 0, with the chorus ping-pong)
+    ts_shock = "B_CHOICE_BufferStyle=Per Model Default," + SHOCK.format(r=160)
+    starts = sorted({min(range(n), key=lambda j: abs(bars[j] - s0)) for s0, *_ in secs})
+    for i in starts:
+        q1 = bars[i] + (bars[i + 1] - bars[i]) // 4
+        sq.add("Trees Stars", 0, "Shockwave", bars[i], min(bars[i] + 450, q1), ts_shock, bar_pal[i])
+    for i in range(n):
+        if bar_kind[i] != "chorus":
+            sq.add("Trees Stars", 1, "Ripple", bars[i], bars[i + 1], "B_CHOICE_BufferStyle=Per Model Default," + RIPPLE, bar_pal[i])
+    i = 0
+    while i < n:
+        if bar_kind[i] != "chorus":
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and bar_kind[j + 1] == "chorus" and bar_pal[j + 1] == bar_pal[i] and j + 1 - i < 16:
+            j += 1
+        sq.add("Trees Stars", 2, "Pinwheel", bars[i], bars[j + 1], "B_CHOICE_BufferStyle=Per Model Default," + PINWHEEL, bar_pal[i])
+        i = j + 1
     # Mega Tree: Aurora shader (palette-masked) with a one-colour On (Average blend) on top. Both change
     # only when the Trees VU meter does, and the tint is the Trees' first colour so the two trees match.
+    used = collections.Counter()
+    # shader "peak" = only the song's loudest choruses (the absolute 0.9 cut-off marks most choruses on some songs)
+    top = 0.97 * max([x[3] for x in secs if x[2] == "chorus"] or [1.0])
     for b0, b1, pk in tree_blocks:
-        sq.add("Mega Tree", 1, "Shader", bars[b0], bars[b1 + 1], AURORA, pk)
+        story = "peak" if bar_kind[b0] == "chorus" and sec_at(bars[b0])[3] >= top else pk
+        pick = SHADER_PICK[story]
+        shader = pick[used[story] % len(pick)]
+        used[story] += 1
+        sq.add("Mega Tree", 1, "Shader", bars[b0], bars[b1 + 1], shader_settings(shader, shader_dir), pk)
         sq.add("Mega Tree", 0, "On", bars[b0], bars[b1 + 1], ON_TINT, pk, role="treetint")
     # Icicles: wash per 2 bars, FloodLights: wash per section
     for i in range(0, n, 2):
