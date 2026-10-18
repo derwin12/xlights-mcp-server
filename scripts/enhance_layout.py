@@ -49,6 +49,8 @@ PALETTES = {
         "flood": ("#C00000", "#FF4040"), "megatree": ("#E00000", "#FFFFFF", "#FF8040"),
     },
 }
+for _p in PALETTES.values():
+    _p["text"] = ("#FFFFFF",)
 ROLE = {"House Outline": "outline", "Trees": "trees", "Arches": "arches", "Stars": "stars",
         "Mega Topper": "topper", "Mega Tree": "megatree", "Trees Stars": "trees", "Icicles": "icicles", "FloodLights": "flood"}
 
@@ -176,19 +178,27 @@ class Seq:
     def pal(self, key: str, role: str) -> int:
         if (key, role) not in self._pal:
             # tint0..2 = one colour of the Mega Tree set, so a tint layer can step through them
-            if role == "treetint":
+            if role == "lyric":
+                cols = (PALETTES[key]["stars"][0],)
+            elif role == "lyricbg":
+                c = PALETTES[key]["flood"][0].lstrip("#")
+                cols = ("#" + "".join(f"{int(int(c[k:k + 2], 16) * 0.3):02X}" for k in (0, 2, 4)),)
+            elif role == "treetint":
                 cols = (PALETTES[key]["trees"][0],)
             elif role.startswith("tint"):
                 cols = (PALETTES[key]["megatree"][int(role[4:])],)
             else:
                 cols = PALETTES[key][role]
             # no sparkles on the floods; the tint layer is Average-blended over the shader, so they go on the shader layer
-            sparkle = role not in ("treetint", "flood")
+            sparkle = role not in ("treetint", "flood", "text", "lyric", "lyricbg")
             ET.SubElement(self.pals, "ColorPalette").text = palette_text(*cols, sparkle=sparkle, sparkle_color=SPARKLE_COLOR[key])
             self._pal[(key, role)] = len(self.pals) - 1
         return self._pal[(key, role)]
 
     def layers(self, name: str):
+        for d in self.disp:
+            if d.get("type") == "model" and d.get("name") == name:
+                d.set("visible", "1")
         for e in self.eff:
             if e.get("name") == name and e.get("type") == "model":
                 return e
@@ -196,6 +206,22 @@ class Seq:
         el = ET.Element("Element", {"type": "model", "name": name})
         self._insert(self.eff, el)
         return el
+
+    def add_sub(self, model: str, sub: str, name: str, start: int, end: int, settings: str, palkey: str, role: str):
+        """Effect on a submodel row (xLights stores these as SubModelEffectLayer inside the model's Element)."""
+        el = self.layers(model)
+        if el.find("EffectLayer") is None:
+            el.insert(0, ET.Element("EffectLayer"))
+        lay = next((l for l in el.findall("SubModelEffectLayer") if l.get("name") == sub), None)
+        if lay is None:
+            lay = ET.SubElement(el, "SubModelEffectLayer", {"name": sub})
+        ref = self.ref(settings)
+        attrs = {"ref": str(ref), "name": name}
+        dup = sum(1 for e in lay if e.get("ref") == str(ref))
+        if dup:
+            attrs["id"] = str(dup)  # xLights numbers repeats of the same settings on one row
+        attrs.update(startTime=str(start), endTime=str(end), palette=str(self.pal(palkey, role)))
+        ET.SubElement(lay, "Effect", attrs)
 
     @staticmethod
     def _insert(parent, el):
@@ -222,12 +248,246 @@ class Seq:
         })
 
 
+MH_MODELS = [f"MH-{i}" for i in range(1, 9)]
+MH_PAN = 90.0  # pan 90 keeps every beam in the camera plane: tilt is then the left/right lean (positive = right)
+MH_WHITE = (0.0, 0.0, 1.0)
+MH_ANY = "#FFFFFF"
+MH_PRE_MS = 1000  # longest lead-in a head gets to reach its next pose
+
+
+VIDEO = ("E_CHECKBOX_SynchroniseWithAudio=0,E_CHECKBOX_Video_AspectRatio=0,E_CHECKBOX_Video_TransparentBlack=0,"
+         "E_CHOICE_Video_DurationTreatment=Normal,E_FILEPICKERCTRL_Video_Filename={f},E_TEXTCTRL_SampleSpacing=0,"
+         "E_TEXTCTRL_Video_CropBottom={cb},E_TEXTCTRL_Video_CropLeft=0,E_TEXTCTRL_Video_CropRight=100,E_TEXTCTRL_Video_CropTop={ct},"
+         "E_TEXTCTRL_Video_Starttime=0.0,E_TEXTCTRL_Video_TransparentBlack=0,T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,"
+         "T_SLIDER_EffectLayerMix=0")
+MEGA_TREE_LIKE = ("Mega Tree", "Matrix", "Matrix 2")
+RADIO = "Radio_EFL"
+RADIO_TEXT = ("E_CHECKBOX_Text_Color_PerWord=0,E_CHECKBOX_Text_PixelOffsets=0,E_CHOICE_Text_Count=none,E_CHOICE_Text_Dir=left,"
+              "E_CHOICE_Text_Effect=normal,E_CHOICE_Text_Font=5-5x5 Mono,E_FILEPICKERCTRL_Text_File=,"
+              "E_FONTPICKER_Text_Font='segoe ui',E_NOTEBOOK=Start Position,E_SLIDER_Text_XEnd=0,E_SLIDER_Text_XStart=0,"
+              "E_SLIDER_Text_YEnd=0,E_SLIDER_Text_YStart=0,E_TEXTCTRL_Text={t},E_TEXTCTRL_Text_Speed=10,"
+              "T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,T_SLIDER_EffectLayerMix=0")
+RADIO_VU = ("B_CHOICE_BufferStyle=Default,E_CHECKBOX_Regex=0,E_CHOICE_VUMeter_Type={t},E_SLIDER_VUMeter_Bars=20,"
+            "E_SLIDER_VUMeter_Gain=0,E_SLIDER_VUMeter_Sensitivity=70,E_TEXTCTRL_Filter=")
+STROBE = "E_CHECKBOX_Strobe_Music=1,E_SLIDER_Number_Strobes=2,E_SLIDER_Strobe_Duration=8,E_SLIDER_Strobe_Type=1"
+
+
+_NO_PUNCT = str.maketrans("", "", ".,!?;:")  # trailing punctuation only eats width on the matrix
+LYRIC_TEXT = ("E_CHECKBOX_Text_Color_PerWord=0,E_CHECKBOX_Text_PixelOffsets=0,E_CHOICE_Text_Count=none,E_CHOICE_Text_Dir=none,"
+              "E_CHOICE_Text_Effect=normal,E_CHOICE_Text_Font=12-15x15 Bold,E_CHOICE_Text_LyricTrack=,"
+              "E_FILEPICKERCTRL_Text_File=,E_FONTPICKER_Text_Font='segoe ui',E_NOTEBOOK=Start Position,E_SLIDER_Text_XEnd={xe},"
+              "E_SLIDER_Text_XStart={xs},E_SLIDER_Text_YEnd=0,E_SLIDER_Text_YStart=0,E_TEXTCTRL_Text={w},E_TEXTCTRL_Text_Speed=10,"
+              "T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,T_SLIDER_EffectLayerMix=0")
+LYRIC_CHAR_PX, LYRIC_NARROW_PX, LYRIC_MATRIX_PX, LYRIC_MARGIN_PX = 13, 8, 120, 4  # 12-15x15 Bold glyph advance, Lyrics Matrix width
+
+
+def lyric_drift(word: str) -> int:
+    """Half-travel (percent of the matrix width) for a word wider than the matrix, else 0: it drifts left to right."""
+    width = sum(LYRIC_NARROW_PX if ch in "I'-1 " else LYRIC_CHAR_PX for ch in word)
+    over = width - (LYRIC_MATRIX_PX - 2 * LYRIC_MARGIN_PX)
+    return 0 if over <= 0 else min(200, int(round((over / 2 + 2) / LYRIC_MATRIX_PX * 100)))
+
+
+def add_lyric_words(sq: Seq, tree_blocks, bars) -> None:
+    """Lyrics Matrix: the sung words (one at a time, from a 'Lyrics - Words' timing track made from the singing props' word
+    layer) in a palette colour over a dark shade of the section's colour; both change with the Trees VU blocks."""
+    src = None
+    for el in sq.eff:
+        if el.get("type") == "timing" and el.get("name", "").startswith("Lyrics - "):
+            layers = el.findall("EffectLayer")
+            if len(layers) == 3 and (src is None or len(layers[1]) > len(src[1])):
+                src = layers  # phrases, words, phonemes
+    if src is None:
+        print("lyrics matrix: no lyric tracks, skipped")
+        return
+    # The Text effect's "Lyrics - Words" choice = a timing track named "Lyrics" with phrase/word/phoneme layers, as in the
+    # user's own sequences; the singing props' tracks have other names, so copy the fullest one under that name
+    # (upper case for readability on the matrix; the props' own tracks keep their case).
+    if not any(e.get("name") == "Lyrics" and e.get("type") == "timing" for e in sq.eff):
+        ET.SubElement(sq.disp, "Element", {"collapsed": "0", "type": "timing", "name": "Lyrics", "visible": "1", "active": "0"})
+        track = ET.SubElement(sq.eff, "Element", {"type": "timing", "name": "Lyrics"})
+        for layer in src:
+            lay = ET.SubElement(track, "EffectLayer")
+            for e in layer.findall("Effect"):
+                ET.SubElement(lay, "Effect", {"label": e.get("label", "").upper().translate(_NO_PUNCT).strip(), "startTime": e.get("startTime"), "endTime": e.get("endTime")})
+    best = src[1]
+    # colour per word = colour story of the Trees block it falls in; the background On layer runs per block
+    for b0, b1, pk in tree_blocks:
+        sq.add("Lyrics Matrix", 1, "On", bars[b0], bars[b1 + 1], ON, pk, role="lyricbg")
+    block_of = lambda t: next((pk for b0, b1, pk in tree_blocks if bars[b0] <= t < bars[b1 + 1]), tree_blocks[-1][2])
+    words = [(int(e.get("startTime")), int(e.get("endTime")), e.get("label", "").upper().translate(_NO_PUNCT).replace("&", "AND").replace(",", "").strip())
+             for e in best.findall("Effect")]
+    drifting = 0
+    for a, b, w in words:
+        if not w or b - a < 25:
+            continue
+        d = lyric_drift(w)
+        drifting += d > 0
+        sq.add("Lyrics Matrix", 0, "Text", a, b, LYRIC_TEXT.format(w=w, xs=-d, xe=d), block_of(a), role="lyric")
+    print(f"lyrics matrix: {len(words)} words ({drifting} drift left to right), {len(tree_blocks)} colour blocks")
+
+
+def add_radio(sq: Seq, bars, bar_kind, bar_peak, bar_pal, tree_blocks, title: str, dur: int, artist: str = "Eclipse 6") -> None:
+    """Radio_EFL: scrolling "now playing" text on the Tune to Matrix, a VU meter on the Large matrix (changing with the
+    Trees VU blocks), beat pulses on the speakers, bar-driven shockwaves on the spinners and a chase on the outline/handle.
+    Submodel rows follow how the user's own sequences drive this model."""
+    n = len(bars) - 1
+    text = f"NOW PLAYING: {title} - {artist}".upper().replace(",", "").replace("&", "AND")
+    sq.add_sub(RADIO, "Tune to Matrix", "Text", 0, dur, RADIO_TEXT.format(t=text), "verse", "text")
+    for blk, (b0, b1, pk) in enumerate(tree_blocks):
+        t = "Spectrogram" if blk % 2 == 0 else "Volume Bars"
+        sq.add_sub(RADIO, "Large matrix", "VU Meter", bars[b0], bars[b1 + 1], RADIO_VU.format(t=t), pk, "trees")
+    shock = "B_CHOICE_BufferStyle=Per Preview," + SHOCK
+    for i in range(n):
+        q = [bars[i] + (bars[i + 1] - bars[i]) * k // 4 for k in range(5)]
+        pk, chorus = bar_pal[i], bar_kind[i] == "chorus"
+        r = 160 if bar_peak[i] else 100
+        for sub in ("Outline", "Handle"):
+            sq.add_sub(RADIO, sub, "SingleStrand", bars[i], bars[i + 1],
+                       CHASE.format(d="Left-Right" if i % 2 == 0 else "Right-Left"), pk, "outline")
+        # speakers ping-pong in choruses: circles on beats 1 and 3, star on beats 2 and 4; otherwise one pulse per bar
+        beats = range(4) if chorus else (0,)
+        for k in beats:
+            end = min(q[k] + 450, q[k + 1] if chorus else bars[i + 1])
+            if k % 2 == 0:
+                sq.add_sub(RADIO, "Speaker Circles", "Shockwave", q[k], end, shock.format(r=r), pk, "icicles")
+            else:
+                sq.add_sub(RADIO, "Speaker Star", "Shockwave", q[k], end, shock.format(r=r), pk, "stars")
+        if not chorus:
+            sq.add_sub(RADIO, "Speaker Star", "SingleStrand", q[2], bars[i + 1],
+                       CHASE.format(d="Right-Left" if i % 2 == 0 else "Left-Right"), pk, "stars")
+        sq.add_sub(RADIO, "5x5 Spinners", "Shockwave", bars[i], min(bars[i] + 450, bars[i + 1]), shock.format(r=r), pk, "arches")
+        if bar_peak[i] and chorus:
+            sq.add_sub(RADIO, "5x5 Spinners", "Strobe", q[2], q[3], STROBE, "peak", "arches")
+    print(f"radio: '{text}'")
+
+
+def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
+    """A few white moving-head moves tied to the sections: a soft fan 'pool' in verses, a sweep on each section
+    change, left/right bank ping-pong on chorus beats, a skyward strobe burst on peak-chorus downbeats and a
+    converge-and-fade over the last two bars. Heads are dark between effects."""
+    from video_beams_to_xsq import mh_settings  # full xLights key set, so the effects survive export/import
+
+    n = len(bars) - 1
+    pal = len(sq.pals)
+    ET.SubElement(sq.pals, "ColorPalette").text = palette_text(MH_ANY)
+
+    def fan(i):  # -1 (leftmost head) .. +1 (rightmost)
+        return (i - 3.5) / 3.5
+
+    plan = [[] for _ in MH_MODELS]  # per head: (start, end, tilt0, tilt1, dimmer)
+
+    def put(i, start, end, t0, t1, dimmer):
+        plan[i].append((start, end, t0, t1, dimmer))
+
+    def emit(i, start, end, t0, t1, dimmer, link=False):
+        settings = mh_settings(MH_PAN, MH_PAN, t0, t1, MH_WHITE, "Dimmer: " + dimmer if dimmer else "", link=link)
+        el = sq.layers(MH_MODELS[i])
+        if not el.findall("EffectLayer"):
+            ET.SubElement(el, "EffectLayer")
+        ET.SubElement(el.find("EffectLayer"), "Effect", {
+            "name": "Moving Head", "startTime": str(start), "endTime": str(end), "ref": str(sq.ref(settings)), "palette": str(pal)})
+
+    def curve(*pts):
+        return "&comma;".join(f"{v}" for p in pts for v in p)
+
+    FADE_UP_DOWN = curve((0, 0), (0.5, 0.6), (1, 0))
+    SWEEP_DIM = curve((0, 0), (0.15, 1), (0.7, 1), (1, 0))
+    PING_DIM = curve((0, 1), (1, 0))
+    BURST_DIM = curve((0, 1), (0.12, 0), (0.25, 1), (0.37, 0), (0.5, 1), (0.62, 0), (0.75, 1), (1, 0))
+    OUTRO_DIM = curve((0, 0), (0.4, 0.8), (1, 0))
+
+    kind = ["pool"] * n
+    for i in range(n):
+        if bar_kind[i] == "chorus":
+            kind[i] = "chorus"
+    for s0, *_ in secs[1:]:
+        kind[min(range(n), key=lambda j: abs(bars[j] - s0))] = "sweep"
+    if n >= 6:
+        kind[n - 2] = kind[n - 1] = "outro"
+
+    pool_run = []
+
+    def flush_pool():
+        for k in range(0, len(pool_run), 2):
+            chunk = pool_run[k:k + 2]
+            for h in range(8):
+                put(h, bars[chunk[0]], bars[chunk[-1] + 1], fan(h) * 12, fan(h) * 12, FADE_UP_DOWN)
+        pool_run.clear()
+
+    count = 0
+    for i in range(n):
+        if kind[i] == "pool":
+            if pool_run and pool_run[-1] != i - 1:
+                flush_pool()
+            pool_run.append(i)
+            continue
+        flush_pool()
+        s, e = bars[i], bars[i + 1]
+        if kind[i] == "sweep":  # outside to inside over the bar
+            for h in range(8):
+                put(h, s, e, fan(h) * 55, fan(h) * 10, SWEEP_DIM)
+        elif kind[i] == "chorus":
+            q = [s + (e - s) * k // 4 for k in range(5)]
+            for k in range(4):
+                if k == 0 and bar_peak[i]:
+                    for h in range(8):
+                        put(h, q[0], min(q[0] + 500, q[1]), 0, 0, BURST_DIM)
+                    continue
+                swing = 18 if (i + k) % 2 == 0 else -18
+                for h in range(8):
+                    if h % 2 == k % 2:  # heads 1,3,5,7 on beats 1,3; heads 2,4,6,8 on beats 2,4
+                        put(h, q[k], q[k + 1], fan(h) * 20 - swing, fan(h) * 20 + swing, PING_DIM)
+        elif kind[i] == "outro" and kind[i - 1] != "outro":
+            for h in range(8):
+                put(h, s, bars[i + 2], fan(h) * 40, 0, OUTRO_DIM)
+        count += 1
+    flush_pool()
+    # Before every beam, a dark pan/tilt-only effect with "link to next effect" moves the head to the beam's start pose
+    # (the motors are slow: otherwise the beam would appear while the head is still swinging in from its last pose).
+    pre = 0
+    for h, effs in enumerate(plan):
+        cursor, tilt = 0, 0.0  # rest pose: pan 90, tilt 0 (straight up)
+        for start, end, t0, t1, dimmer in sorted(effs):
+            if start - cursor >= 25:
+                emit(h, max(cursor, start - MH_PRE_MS), start, tilt, t0, "", link=True)
+                pre += 1
+            emit(h, start, end, t0, t1, dimmer)
+            cursor, tilt = end, t1
+    print(f"moving heads: {count} non-pool bars, 8 heads, white, {pre} pre-position effects")
+
+
+def order_rows(sq: Seq, show_dir: Path) -> None:
+    """Master view order: model groups first, then models, each alphabetical. Timing rows keep their slots."""
+    groups = {g.get("name") for g in ET.parse(show_dir / "xlights_rgbeffects.xml").getroot().iter("modelGroup")}
+
+    def key(e):
+        name = e.get("name", "")
+        return (name not in groups, name.lower())
+
+    for parent in (sq.disp, sq.eff):
+        children = list(parent)
+        ordered = iter(sorted((c for c in children if c.get("type") == "model"), key=key))
+        rebuilt = [next(ordered) if c.get("type") == "model" else c for c in children]
+        for c in children:
+            parent.remove(c)
+        parent.extend(rebuilt)
+    print(f"row order: {sum(1 for e in sq.disp if e.get('type') == 'model' and e.get('name') in groups)} groups first, then models A-Z")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("xsq")
     ap.add_argument("--mp3")
     ap.add_argument("--palettes", help='JSON overriding the colour story: {"chorusA": {"trees": ["#hex", "#hex"]}, '
                     '"sparkle": {"chorusA": "#hex"}}; only the roles given are replaced')
+    ap.add_argument("--artist", default="Eclipse 6", help="artist shown in the radio's now-playing text")
+    ap.add_argument("--video", help="video file path as the show folder sees it (e.g. Videos/Name.mp4) to play on --video-model")
+    ap.add_argument("--video-model", default="Matrix", help="matrix that plays --video instead of the Mega Tree effects")
+    ap.add_argument("--video-crop", type=int, default=0, help="percent of the video height cropped from the top and from the bottom (fits 16:9 on a 2:1 matrix)")
+    ap.add_argument("--no-lyrics", action="store_true", help="leave the Lyrics Matrix blank")
+    ap.add_argument("--no-radio", action="store_true", help="leave the Radio_EFL model blank")
+    ap.add_argument("--no-heads", action="store_true", help="leave the moving heads (MH-1..MH-8) blank")
     args = ap.parse_args()
     if args.palettes:
         over = json.load(open(args.palettes, encoding="utf-8"))
@@ -346,8 +606,11 @@ def main() -> None:
         pick = SHADER_PICK[story]
         shader = pick[used[story] % len(pick)]
         used[story] += 1
-        sq.add("Mega Tree", 1, "Shader", bars[b0], bars[b1 + 1], shader_settings(shader, shader_dir), pk)
-        sq.add("Mega Tree", 0, "On", bars[b0], bars[b1 + 1], ON_TINT, pk, role="treetint")
+        for m in MEGA_TREE_LIKE:  # the two matrices carry the same look as the Mega Tree
+            if m == args.video_model and args.video:
+                continue  # that matrix plays the video instead
+            sq.add(m, 1, "Shader", bars[b0], bars[b1 + 1], shader_settings(shader, shader_dir), pk, role=ROLE["Mega Tree"])
+            sq.add(m, 0, "On", bars[b0], bars[b1 + 1], ON_TINT, pk, role="treetint")
     # Icicles: wash per 2 bars, FloodLights: wash per section
     for i in range(0, n, 2):
         sq.add("Icicles", 0, "On", bars[i], bars[min(i + 2, n)], ON, bar_pal[i])
@@ -355,6 +618,16 @@ def main() -> None:
         idx = [i for i in range(n) if s0 <= bars[i] < s1]
         if idx:
             sq.add("FloodLights", 0, "On", bars[idx[0]], bars[idx[-1] + 1], ON, bar_pal[idx[0]])
+
+    if args.video:
+        sq.add(args.video_model, 0, "Video", 0, dur, VIDEO.format(f=args.video, ct=100 - args.video_crop, cb=args.video_crop), "verse", "text")
+        print(f"video: {args.video} on {args.video_model} (crop {args.video_crop}% top and bottom)")
+    if not args.no_lyrics:
+        add_lyric_words(sq, tree_blocks, bars)
+    if not args.no_radio:
+        add_radio(sq, bars, bar_kind, bar_peak, bar_pal, tree_blocks, ET.parse(xsq).getroot().findtext("head/song") or xsq.stem, dur, args.artist)
+    if not args.no_heads:
+        add_moving_heads(sq, bars, bar_kind, bar_peak, secs)
 
     # hide model/group rows with no effects (timing rows stay as they are)
     used = {e.get("name") for e in sq.eff if e.get("type") == "model" and e.findall(".//Effect")}
@@ -364,6 +637,7 @@ def main() -> None:
             e.set("visible", "0")
             hidden += 1
     print(f"hid {hidden} unused rows, {len(used)} visible")
+    order_rows(sq, xsq.parent)
     # sequences were cut at the last lyric; stretch to the audio so the outro isn't clipped
     sq.root.find("head/sequenceDuration").text = f"{max(dur, secs[-1][1]) / 1000:.3f}"
     ET.indent(sq.tree, space="  ")
