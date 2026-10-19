@@ -501,6 +501,15 @@ def main() -> None:
     secs = section_plan(detect_structure(mp3), None)
     dur = int(float(ET.parse(xsq).getroot().findtext("head/sequenceDuration")) * 1000)
     bars = [int(t * 1000) for t in beats.downbeat_times]
+    # a song that opens before the first detected downbeat (intro, count-in): extend the bar grid back to 0
+    if len(bars) > 1 and bars[0] > 0:
+        period = bars[1] - bars[0]
+        lead = []
+        t = bars[0] - period
+        while t > 0:
+            lead.append(t)
+            t -= period
+        bars = [0] + lead[::-1] + bars
     bars.append(min(dur, bars[-1] + (bars[-1] - bars[-2])))
     print(f"{beats.tempo:.0f} BPM, {len(bars) - 1} bars, {len(secs)} sections")
 
