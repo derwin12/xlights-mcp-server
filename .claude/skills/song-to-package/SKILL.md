@@ -55,6 +55,13 @@ For validating in xLights the user imports the .xsqz, so it needs the audio: use
   lyric lines between its neighbours' matched lines (max 2, 0.35-1.2 s per word), then the aligner times them. Whisper
   missed This Christmas's opening HANG ALL THE MISTLETOE (sung from 6.5 s). Line matching follows song order (a near-equal
   line at/after the position reached wins, so repeated choruses map forward); the words are still fixed from the best line.
+- **Aligner memory** (2026-10-25): the stock lang dir's `L.fst` is 4.2 GB (207k words x up to ~50 sung-length variants,
+  12.9M lexicon lines) and `compile-train-graphs` loads it whole: ~14.5 GB RAM per run whatever the length, so Claude
+  Code killed the rollout twice ("system low on memory"). Chunking did not help; an 8 GB container cap made every run fail.
+  `scripts/nus_small_align.sh` (copied into the container as /NUSAutoLyrixAlign/xl_small_align.sh by every `align`
+  call) runs the same steps with a lang dir of only the song's words: identical timings (0 ms diff on 163 words), 2-3 GB
+  peak, about twice as fast. Its quirks: run PreProcessing.py BEFORE sourcing path.sh (path.sh puts a python without
+  pydub first); no dos2unix on sh's PATH (sed instead). Chunking (`align_chunked`, CHUNK_S = 600) stays as a safety net.
 - **Aligner = timing only**: words missing from NUSAutoLyrixAlign's ~207k-word dictionary come back labelled `BREATH*`
   (This Christmas "BOOYAH" at 1:05; 19 in Mean Grinch: Whoville, Grinchification...). `rebuild` keeps our own word as the
   label and takes only the start/end from the aligner (one output row per input word, checked by count).

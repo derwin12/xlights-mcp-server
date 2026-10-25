@@ -34,6 +34,8 @@ from pathlib import Path
 
 import requests
 
+HERE = Path(__file__).resolve().parent
+
 LRCLIB = "https://lrclib.net/api"
 UA = {"User-Agent": "xlights-mcp-server song pipeline (https://github.com/derwin12)"}
 MATCH_MIN = 0.5     # word-level similarity for a phrase to take fixes from an lrclib line
@@ -43,7 +45,11 @@ LOOSE_MIN, LOOSE_ANCHOR = 0.4, 4    # or a weaker match sharing more words: I WA
 SPAN_MAX = 5        # longest differing stretch (either side) that is replaced
 SONG_MIN = 0.35     # whole-song similarity below which lrclib is ignored
 DRIFT_S = 1.5       # aligned phrase may start/end this far outside Whisper's window
-SNAP_S = 0.12       # a word start moves to a voice onset at most this far away
+CHUNK_S = 600.0     # longest stretch aligned in one run; memory is fixed by the per-song lexicon now
+                    # (nus_small_align.sh), so only very long songs are split - whole songs align as validated
+SMALL_ALIGN = "/NUSAutoLyrixAlign/xl_small_align.sh"
+CHUNK_PAD_S = 2.0   # audio kept either side of a chunk's phrases
+SNAP_S = 0.12      # a word start moves to a voice onset at most this far away
 ORDER_TIE = 0.15   # a line this close to the best match, at or after the song position reached, wins
 SUNG_REL = 0.2     # vocal-stem loudness (x its 90th percentile) that counts as singing for fill_gaps
 GAP_SUNG_S = 1.5    # seconds of singing a gap needs before lrclib lines are put into it
@@ -235,26 +241,77 @@ def snap_onsets(phrases: list[dict], vocals: Path) -> int:
     return moved
 
 
-def align(audio: Path, words: list[str], container: str) -> list[tuple[float, float, str]]:
-    """Run NUSAutoLyrixAlign in the container; [(start, end, WORD)] in input order."""
+def align_chunked(audio: Path, phrases: list[dict], fixed: list[list[str]], container: str):
+    """Align in chunks of up to CHUNK_S, cut in the gaps between phrases; one (s, e, WORD) or None per word.
+
+    The aligner's memory grows with the length of what it aligns: whole 6-8 minute medleys ran the machine
+    out of memory (Claude Code stopped the rollout twice in this step). A chunk that fails or returns the
+    wrong word count gives None for its words, so only its phrases keep Whisper timing.
+    """
+    import librosa
+
+    dur = librosa.get_duration(path=str(audio))
+    groups, cur = [], []
+    for i, p in enumerate(phrases):
+        if cur and p["end"] - phrases[cur[0]]["start"] > CHUNK_S:
+            groups.append(cur)
+            cur = []
+        cur.append(i)
+    if cur:
+        groups.append(cur)
+    out: list = []
+    for g, idx in enumerate(groups):
+        # window: the phrases plus padding, never past the middle of the gap to the neighbouring chunk
+        lo = phrases[idx[0]]["start"] - CHUNK_PAD_S
+        hi = phrases[idx[-1]]["end"] + CHUNK_PAD_S
+        if g:
+            lo = max(lo, (phrases[groups[g - 1][-1]]["end"] + phrases[idx[0]]["start"]) / 2)
+        if g + 1 < len(groups):
+            hi = min(hi, (phrases[idx[-1]]["end"] + phrases[groups[g + 1][0]]["start"]) / 2)
+        lo, hi = max(0.0, lo), min(dur, hi)
+        words = [w for i in idx for w in fixed[i]]
+        try:
+            got = align(audio, words, container, lo, hi)
+        except subprocess.CalledProcessError as e:
+            print(f"  chunk {g + 1}/{len(groups)} ({lo:.0f}-{hi:.0f} s): aligner failed ({e.returncode})")
+            got = []
+        if len(got) != len(words):
+            print(f"  chunk {g + 1}/{len(groups)} ({lo:.0f}-{hi:.0f} s): {len(got)} of {len(words)} words; "
+                  "its phrases keep Whisper timing")
+            got = [None] * len(words)
+        out += got
+    print(f"aligned in {len(groups)} chunk(s) of up to {CHUNK_S:.0f} s")
+    return out
+
+
+def align(audio: Path, words: list[str], container: str, start: float | None = None,
+          end: float | None = None) -> list[tuple[float, float, str]]:
+    """Run NUSAutoLyrixAlign in the container on audio[start:end]; [(start, end, WORD)] in song time."""
     env = {**os.environ, "MSYS_NO_PATHCONV": "1"}   # keep Git Bash from rewriting /container/paths
-    tag = f"xl{int(time.time())}"
+    tag = f"xl{time.time_ns()}"
+    cut = (["-ss", f"{start:.3f}"] if start else []) + (["-to", f"{end:.3f}"] if end else [])
     with tempfile.TemporaryDirectory() as td:
         wav, txt = Path(td) / "song.wav", Path(td) / "lyrics.txt"
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(audio), "-ac", "1", "-ar", "16000",
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(audio), *cut, "-ac", "1", "-ar", "16000",
                         str(wav)], check=True)
         txt.write_text(" ".join(words), encoding="utf-8")
         subprocess.run(["docker", "start", container], check=True, capture_output=True, env=env)
+        # per-song lexicon instead of the stock 4.2 GB L.fst: 2 GB instead of 14 GB of RAM, twice as fast, same times
+        subprocess.run(["docker", "cp", str(HERE / "nus_small_align.sh"), f"{container}:{SMALL_ALIGN}"],
+                       check=True, env=env)
+        subprocess.run(["docker", "exec", container, "sh", "-c", f"sed -i 's/\\r$//' {SMALL_ALIGN} && chmod +x {SMALL_ALIGN}"],
+                       check=True, env=env)
         for f in (wav, txt):
             subprocess.run(["docker", "cp", str(f), f"{container}:/tmp/{tag}_{f.name}"], check=True, env=env)
-        subprocess.run(["docker", "exec", "-w", "/NUSAutoLyrixAlign", container, "./RunAlignment.sh",
+        subprocess.run(["docker", "exec", "-w", "/NUSAutoLyrixAlign", container, SMALL_ALIGN,
                         f"/tmp/{tag}_song.wav", f"/tmp/{tag}_lyrics.txt", f"/tmp/{tag}_aligned.txt"],
                        check=True, capture_output=True, env=env)
         res = subprocess.run(["docker", "exec", container, "cat", f"/tmp/{tag}_aligned.txt"],
                              check=True, capture_output=True, text=True, env=env).stdout
         subprocess.run(["docker", "exec", container, "sh", "-c", f"rm -f /tmp/{tag}_*"], env=env)
     rows = [ln.split() for ln in res.splitlines() if ln.strip()]
-    return [(float(s), float(e), w) for s, e, w in rows]
+    off = start or 0.0
+    return [(float(s) + off, float(e) + off, w) for s, e, w in rows]
 
 
 def rebuild(phrases, fixed, aligned) -> tuple[list[dict], int]:
@@ -263,7 +320,7 @@ def rebuild(phrases, fixed, aligned) -> tuple[list[dict], int]:
     for p, words in zip(phrases, fixed):
         got = aligned[k:k + len(words)]
         k += len(words)
-        ok = got and got[0][0] >= p["start"] - DRIFT_S and got[-1][1] <= p["end"] + DRIFT_S
+        ok = got and None not in got and got[0][0] >= p["start"] - DRIFT_S and got[-1][1] <= p["end"] + DRIFT_S
         if ok:
             # times only: a word missing from the aligner's dictionary comes back labelled BREATH* (BOOYAH,
             # GRINCHIFICATION, WHOVILLE), so the label is always our own word
@@ -328,10 +385,7 @@ def main() -> None:
         result, _ = rebuild(phrases, fixed, [])
     else:
         words = [w for ws in fixed for w in ws]
-        aligned = align(Path(args.audio), words, args.container)
-        if len(aligned) != len(words):
-            print(f"aligner returned {len(aligned)} of {len(words)} words; keeping Whisper timing")
-            aligned = []
+        aligned = align_chunked(Path(args.audio), phrases, fixed, args.container)
         result, fallback = rebuild(phrases, fixed, aligned)
         print(f"aligned {len(words)} words; {fallback} of {len(phrases)} phrases kept Whisper timing")
     if args.vocals:
