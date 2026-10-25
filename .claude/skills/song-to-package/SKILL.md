@@ -95,7 +95,9 @@ crystal ball, cowboy, drinkin', mountain, tunes, sing, morning).
 
 **House preview** (step `preview`, before package): `render_preview` in song_to_package.py drives the running xLights over
 automation (port 49914 here, `--port`): closeSequence (never forced - unsaved work makes it skip), loadSequence, renderAll,
-exportVideoPreview at 1920x1058 to `F:\ShowFolderAI\HousePreviewVideos\<name>.mp4`, ffprobe check, one retry on a short or
+exportVideoPreview at 1280x706 (user wants lower-res review videos; was 1920x1058) to
+`F:\ShowFolderAI\HousePreviewVideos\<name>.mp4`; takes about real time or less (Choosin Texas ~2 min, Mean Grinch 9:09 ~6 min),
+not the 30 min quoted from one stalled medley, ffprobe check, one retry on a short or
 truncated file. The user must have xLights on the F:\ShowFolderAI show folder with the normal house preview selected (not MH
 Preview); if xLights is not reachable the step is skipped and `--redo preview` renders it later. Two xLights instances can be
 open (e.g. one on an imported .xsqz's temp folder) - only the one with automation on the port is used; check which one that is

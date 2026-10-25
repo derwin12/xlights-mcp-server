@@ -43,7 +43,8 @@ import lyrics_align  # noqa: E402
 
 STEPS = ["audio", "words", "fix", "xsq", "sections", "preview", "package"]
 LYRIC_LINES = 12    # a YouTube description needs this many short lines in a row to count as lyrics
-PREVIEW_SIZE = (1920, 1058)    # house preview at full size regardless of the pane (eclipse-song-pipeline)
+PREVIEW_SIZE = (1280, 706)     # house preview regardless of the pane: 1920x1058 (the pane's shape) scaled to 720p
+                               # for review videos - quicker to export, about half the file size (user, 2026-10-25)
 
 
 def show_secs(xsq: Path) -> float:
