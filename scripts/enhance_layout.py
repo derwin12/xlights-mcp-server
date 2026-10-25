@@ -21,6 +21,8 @@ from pathlib import Path
 from xlights_mcp.audio.beats import detect_beats
 from xlights_mcp.audio.structure import detect_structure
 
+from grid_tracks import add_grid_tracks
+
 # section palette -> prop role -> (color1, color2); same colour story per section, different shades per prop
 PALETTES = {
     "verse": {  # amber / warm white
@@ -51,7 +53,8 @@ PALETTES = {
 }
 for _p in PALETTES.values():
     _p["text"] = ("#FFFFFF",)
-ROLE = {"House Outline": "outline", "Trees": "trees", "Arches": "arches", "Stars": "stars",
+TREE_LIKE = ("Trees", "Pixel Forest")  # the Pixel Forest (5 small matrices) gets exactly what the Trees get
+ROLE = {"House Outline": "outline", "Trees": "trees", "Pixel Forest": "trees", "Arches": "arches", "Stars": "stars",
         "Mega Topper": "topper", "Mega Tree": "megatree", "Trees Stars": "trees", "Icicles": "icicles", "FloodLights": "flood"}
 
 CHASE = ("B_CHOICE_BufferStyle=Per Model Single Line,E_CHECKBOX_Chase_Group_All=0,"
@@ -498,7 +501,8 @@ def main() -> None:
     mp3 = Path(args.mp3) if args.mp3 else xsq.with_suffix(".mp3")
 
     beats = detect_beats(mp3)
-    secs = section_plan(detect_structure(mp3), None)
+    parts = detect_structure(mp3)
+    secs = section_plan(parts, None)
     dur = int(float(ET.parse(xsq).getroot().findtext("head/sequenceDuration")) * 1000)
     bars = [int(t * 1000) for t in beats.downbeat_times]
     # a song that opens before the first detected downbeat (intro, count-in): extend the bar grid back to 0
@@ -555,8 +559,9 @@ def main() -> None:
             chunk = idx[k:k + 16]
             tree_blocks.append((chunk[0], chunk[-1], bar_pal[chunk[0]]))
     for blk, (b0, b1, pk) in enumerate(tree_blocks):
-        sq.add("Trees", 1, "VU Meter", bars[b0], bars[b1 + 1],
-               VU.format(t="Spectrogram" if blk % 2 == 0 else "Volume Bars"), pk)
+        for m in TREE_LIKE:
+            sq.add(m, 1, "VU Meter", bars[b0], bars[b1 + 1],
+                   VU.format(t="Spectrogram" if blk % 2 == 0 else "Volume Bars"), pk)
     # Arches: chase every other bar (layer 1), Ripple on first bar of each section (layer 0, top)
     for i in range(0, n, 2):
         sq.add("Arches", 1, "SingleStrand", bars[i], bars[min(i + 2, n)],
@@ -583,8 +588,8 @@ def main() -> None:
         r = 160 if bar_peak[i] else 100
         shock = "B_CHOICE_BufferStyle=Per Model Default," + SHOCK.format(r=r)
         for k in range(4):
-            model = "Trees" if k % 2 == 0 else "Trees Stars"
-            sq.add(model, 0, "Shockwave", q[k], min(q[k] + 450, q[k + 1]), shock, bar_pal[i])
+            for model in (TREE_LIKE if k % 2 == 0 else ("Trees Stars",)):
+                sq.add(model, 0, "Shockwave", q[k], min(q[k] + 450, q[k + 1]), shock, bar_pal[i])
     # Trees Stars are lit all song: slow Ripple per bar outside choruses (layer 1), Pinwheel under each chorus run
     # (layer 2), and a full-size Shockwave on the first beat of every section (layer 0, with the chorus ping-pong)
     ts_shock = "B_CHOICE_BufferStyle=Per Model Default," + SHOCK.format(r=160)
@@ -646,6 +651,7 @@ def main() -> None:
             e.set("visible", "0")
             hidden += 1
     print(f"hid {hidden} unused rows, {len(used)} visible")
+    add_grid_tracks(sq.disp, sq.eff, bars, parts)    # Beats / Bars / Song Parts timing tracks of this grid
     order_rows(sq, xsq.parent)
     # sequences were cut at the last lyric; stretch to the audio so the outro isn't clipped
     sq.root.find("head/sequenceDuration").text = f"{max(dur, secs[-1][1]) / 1000:.3f}"

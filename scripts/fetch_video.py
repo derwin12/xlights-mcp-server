@@ -14,6 +14,7 @@ A "403 Forbidden" partway through a download means one of those is missing or ou
 Only download videos you have the right to use; YouTube's terms restrict downloading.
 """
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -39,7 +40,33 @@ def info(url):
         i = y.extract_info(url, download=False)
     return {"id": i["id"], "title": i.get("title"), "duration": i.get("duration"),
             "width": i.get("width"), "height": i.get("height"), "fps": i.get("fps"),
-            "artist": i.get("artist") or i.get("creator"), "track": i.get("track"), "channel": i.get("channel")}
+            "artist": i.get("artist") or i.get("creator"), "track": i.get("track"), "channel": i.get("channel"),
+            "description": i.get("description") or ""}
+
+
+def captions(url):
+    """Text of the video's manual English captions (uploader-typed, e.g. Eclipse 6's parody lyrics), or None.
+
+    YouTube's automatic captions are not used: on songs they are as unreliable as our own Whisper pass.
+    """
+    import html
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        with _ydl({"skip_download": True, "writesubtitles": True, "writeautomaticsub": False,
+                   "subtitleslangs": ["en", "en-US", "en-GB"], "subtitlesformat": "vtt",
+                   "outtmpl": str(Path(td) / "%(id)s.%(ext)s")}) as y:
+            y.download([url])
+        vtt = sorted(Path(td).glob("*.vtt"))
+        if not vtt:
+            return None
+        lines = []
+        for ln in vtt[0].read_text(encoding="utf-8").splitlines():
+            ln = html.unescape(re.sub(r"<[^>]+>", "", ln)).replace("\xa0", " ").strip()
+            if ln and "-->" not in ln and not ln.startswith(("WEBVTT", "Kind:", "Language:", "NOTE")) \
+                    and not ln.isdigit() and (not lines or lines[-1] != ln):
+                lines.append(ln)
+    return "\n".join(lines) or None
 
 
 def fetch(url, out_dir=DEFAULT_DIR, max_height=1080, audio=False):

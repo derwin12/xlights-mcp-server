@@ -18,6 +18,9 @@ Steps (each skipped when its output exists, so a re-run resumes; --redo words|fi
   package  package_xsqz.py           -> <show>\packages\<name>.xsqz  (no audio unless --with-media)
 
 --name defaults to "<artist> - <track>" from YouTube's music tags, else the cleaned video title.
+URL can also be an mp3 already in the show folder, to redo an older song with this pipeline, e.g.
+    song_to_package.py F:\ShowFolderAI\Eclipse6-This-Christmas.mp3 --track "This Christmas" --radio-artist "Eclipse 6"
+        --genius-url https://genius.com/Donny-hathaway-this-christmas-lyrics
 --track/--artist are what lrclib is searched for; for a cover give the original artist or leave it out.
 Needs the karaokeer container (NUSAutoLyrixAlign) in Docker; without it use --redo with lyrics_align --no-align by hand.
 """
@@ -39,7 +42,8 @@ import fetch_video  # noqa: E402
 import lyrics_align  # noqa: E402
 
 STEPS = ["audio", "words", "fix", "xsq", "sections", "preview", "package"]
-PREVIEW_SIZE = (1920, 1058)     # house preview at full size regardless of the pane (eclipse-song-pipeline)
+LYRIC_LINES = 12    # a YouTube description needs this many short lines in a row to count as lyrics
+PREVIEW_SIZE = (1920, 1058)    # house preview at full size regardless of the pane (eclipse-song-pipeline)
 
 
 def show_secs(xsq: Path) -> float:
@@ -124,6 +128,25 @@ def guess(meta: dict) -> tuple[str, str | None]:
     return (parts[0] if parts else "untitled"), None
 
 
+def description_lyrics(desc: str) -> str | None:
+    """Lyrics pasted in a YouTube description (parody channels like Eclipse 6 often do), else None.
+
+    The longest run of short lines (blank lines allowed between verses) with no links or hashtags,
+    when it has at least LYRIC_LINES lines.
+    """
+    blocks, cur = [], []
+    for line in desc.splitlines() + ["http"]:
+        s = line.strip()
+        if s and (len(s) > 80 or re.search(r"https?://|www\.|#\w|@\w|\b(subscribe|follow|instagram|tiktok|"
+                                             r"spotify|itunes|patreon|merch|lyrics by|written by)\b", s, re.I)):
+            blocks.append(cur)
+            cur = []
+        elif s or cur:
+            cur.append(s)
+    best = max(blocks, key=lambda b: sum(1 for s in b if s), default=[])
+    return "\n".join(best).strip() if sum(1 for s in best if s) >= LYRIC_LINES else None
+
+
 def safe(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]+', "", name).strip()
 
@@ -136,7 +159,9 @@ def run(*cmd: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("url")
+    ap.add_argument("url", help="YouTube link, or an mp3 on disk (then pass --track and --name)")
+    ap.add_argument("--radio-artist", help="artist in the radio's NOW PLAYING text when it differs from --artist "
+                                           '(Eclipse6 songs: "Eclipse 6", while lrclib searches the original)')
     ap.add_argument("--name", help='sequence name (default "<artist> - <track>")')
     ap.add_argument("--track", help="song title for lrclib (default from YouTube)")
     ap.add_argument("--artist", help="artist for lrclib (default from YouTube; for a cover the original artist)")
@@ -146,6 +171,11 @@ def main() -> None:
     ap.add_argument("--cues", help="voice cues for song_to_singing_props.py")
     ap.add_argument("--lrclib-id", type=int)
     ap.add_argument("--genius-url", help="Genius lyrics page for the Sections track (default: guessed)")
+    ap.add_argument("--source-url", help="the song's YouTube video when URL is an mp3 on disk: its captions or "
+                                         "description supply the lyrics")
+    ap.add_argument("--lyrics", help="lyrics text file used instead of lrclib (parodies); default: SongWork\\<name>\\"
+                                     "lyrics.txt, written from the video's manual captions or description if they "
+                                     "hold the lyrics")
     ap.add_argument("--redo", choices=STEPS[1:], help="re-run from this step on")
     ap.add_argument("--no-preview", action="store_true", help="skip the house preview video")
     ap.add_argument("--no-images", action="store_true", help="no lyric pictures on the Mega Tree / matrices")
@@ -153,10 +183,15 @@ def main() -> None:
                     help="xLights automation port (49914 on this machine)")
     a = ap.parse_args()
 
-    meta = fetch_video.info(a.url)
-    track, artist = guess(meta)
-    track, artist = a.track or track, a.artist or artist
-    name = safe(a.name or (f"{artist} - {track}" if artist else track))
+    local = None if fetch_video.is_url(a.url) else Path(a.url)
+    if local:       # an mp3 already on disk (e.g. re-doing an Eclipse6 song): name/track come from flags
+        meta = {"title": local.stem, "duration": None, "channel": None}
+        track, artist = a.track or local.stem, a.artist
+    else:
+        meta = fetch_video.info(a.url)
+        track, artist = guess(meta)
+        track, artist = a.track or track, a.artist or artist
+    name = safe(a.name or (local.stem if local else f"{artist} - {track}" if artist else track))
     show = Path(a.show)
     work = show / "SongWork" / name
     work.mkdir(parents=True, exist_ok=True)
@@ -170,12 +205,28 @@ def main() -> None:
     todo = lambda step, out: STEPS.index(step) >= redo or not out.exists()  # noqa: E731
 
     if not mp3.exists():
-        video = fetch_video.fetch(a.url, audio=True)
-        shutil.copyfile(video.with_suffix(".mp3"), mp3)
+        if local:
+            shutil.copyfile(local, mp3)
+        else:
+            download = fetch_video.fetch(a.url, audio=True)
+            shutil.copyfile(download.with_suffix(".mp3"), mp3)
     if todo("words", words):
-        run(str(HERE / "transcribe_words.py"), str(mp3), str(words), "--wav16k", str(wav))
+        run(str(HERE / "transcribe_words.py"), str(mp3), str(words), "--wav16k", str(wav), "--separate")
+    lyrics = Path(a.lyrics) if a.lyrics else work / "lyrics.txt"
+    src = a.source_url or (None if local else a.url)
+    if not a.lyrics and not lyrics.exists() and src:
+        # the uploader's own words beat lrclib (which has nothing for parodies): manual captions, then description
+        for where, text in (("captions", fetch_video.captions(src)),
+                            ("description", description_lyrics(fetch_video.info(src).get("description") or ""))):
+            if text and text.count("\n") + 1 >= LYRIC_LINES:
+                lyrics.write_text(text, encoding="utf-8")
+                print(f"lyrics: {text.count(chr(10)) + 1} lines from the YouTube {where} -> {lyrics}")
+                break
     if todo("fix", fixed):
-        cmd = [str(HERE / "lyrics_align.py"), str(mp3), str(words), str(fixed), "--track", track]
+        cmd = [str(HERE / "lyrics_align.py"), str(mp3), str(words), str(fixed), "--track", track,
+               "--vocals", str(wav)]    # the vocal stem from transcribe_words --separate: fills missed lines
+        if lyrics.exists():
+            cmd += ["--lyrics-file", str(lyrics)]
         if artist and a.artist:     # YouTube's artist may be the cover band; only restrict when asked
             cmd += ["--artist", artist]
         if a.lrclib_id:
@@ -190,7 +241,8 @@ def main() -> None:
         run(*cmd)
         if not a.faces_only:
             xsq.with_suffix(".xsq.bak").unlink(missing_ok=True)   # enhance_layout keeps the first .bak
-            run(str(HERE / "enhance_layout.py"), str(xsq), "--artist", artist or meta.get("channel") or "")
+            run(str(HERE / "enhance_layout.py"), str(xsq), "--artist",
+                a.radio_artist or artist or meta.get("channel") or "")
         built = True
     if built or STEPS.index("sections") >= redo:
         cmd = [str(HERE / "song_sections.py"), str(xsq), str(fixed), "--artist", a.artist or artist or "",

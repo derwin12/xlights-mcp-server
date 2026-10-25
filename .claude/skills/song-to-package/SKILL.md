@@ -36,6 +36,29 @@ For validating in xLights the user imports the .xsqz, so it needs the audio: use
   the matching rest of the phrase is the signal. Replacing whole phrases with lrclib lines overwrote real cover lines; a
   one-for-one look-alike rule missed AMARILLO (user caught it at 1:08 of Choosin Texas). Regression check: This Christmas
   (cover) must still get only CAROLING and VERY.
+- Rule details (2026-10-25, after the user caught "I wasn't a match FOR THAT KIND OF SPARK" heard as "BUT BACK ON FORK"):
+  a phrase takes fixes when similarity >= 0.5 with >= 3 shared words, OR >= 0.4 with >= 4 shared words; a differing stretch
+  is replaced when it is <= 5 words and the word counts differ by <= 2 (stops WE'LL -> HOW MUCH FUN IT'S GONNA BE).
+- Long Whisper phrases (> 7 s, >= 8 words) are split at the widest gap between words (>= 3 words a side) before matching.
+- **Transcription** (`transcribe_words.py --separate`, used by the pipeline): Spleeter vocals in the karaokeer container, then
+  three Whisper passes merged - vocals at temperature 0 (fullest but loops "ba-ba-ba" over whole verses), vocals with
+  temperature retries (no loops, skips passages), the full mix - base = most words after removing looped phrases, gaps filled
+  from the others; phrases over a silent vocal stem (< 0.05 of its 90th pct) are dropped. Any single setting lost a verse,
+  the chant or the ending of This Christmas; a fixed ctranslate2 seed did not make retries repeatable; Silero VAD cut singing.
+  The 16 kHz wav kept in SongWork is the vocal stem (better for the male/female pitch split).
+- **Uploader lyrics first**: the video's manual English captions (`fetch_video.captions`, never auto-captions), else lyrics
+  pasted in its description (`description_lyrics`), are saved as SongWork\<name>\lyrics.txt and used instead of lrclib
+  (`--lyrics-file`; `--lyrics` to pass your own). Eclipse 6 uploads manual captions = their parody lyrics: Mean Grinch went
+  from no lyric source to 0.79 similarity and 29 real fixes (CRINGIFICATION->GRINCHIFICATION, Mount CRUMPIT). For an mp3 on
+  disk pass `--source-url` (Mean Grinch: https://www.youtube.com/watch?v=eu0PrA10i1I).
+- **Missed lines** (`fill_gaps`, needs `--vocals` = the stem): a gap where the vocal stem shows >= 1.5 s of singing gets the
+  lyric lines between its neighbours' matched lines (max 2, 0.35-1.2 s per word), then the aligner times them. Whisper
+  missed This Christmas's opening HANG ALL THE MISTLETOE (sung from 6.5 s). Line matching follows song order (a near-equal
+  line at/after the position reached wins, so repeated choruses map forward); the words are still fixed from the best line.
+- **Aligner = timing only**: words missing from NUSAutoLyrixAlign's ~207k-word dictionary come back labelled `BREATH*`
+  (This Christmas "BOOYAH" at 1:05; 19 in Mean Grinch: Whoville, Grinchification...). `rebuild` keeps our own word as the
+  label and takes only the start/end from the aligner (one output row per input word, checked by count).
+- **Onset snap** (`snap_onsets`): word starts move to the nearest voice onset in the stem within 0.12 s.
 - lrclib candidates are searched by track (artist only if `--artist` is given) and the one closest to Whisper's text wins;
   covers are listed under the original artist. Similarity ~0.45 is normal for a full song; below 0.35 lrclib is ignored.
 - lrclib's free-text `q=` search often returns 503 ServerOverloaded; use track_name/artist_name (retries built in).

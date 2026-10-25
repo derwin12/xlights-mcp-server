@@ -27,3 +27,6 @@ video_to_gif.py
 
 # Moving head source videos used for beam-analysis tests (large; kept locally)
 test_videos/
+
+# Playwright MCP browser logs
+.playwright-mcp/

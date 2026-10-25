@@ -34,6 +34,7 @@ Result: 4 lyric tracks (Tree Male/Female, Red/Green bulb, voices split by pitch)
 - Adds, from detected bars/sections (bars/beats are the bar split in 4; "chorus" = detected chorus sections):
   - House Outline: Single Strand chase every bar, direction alternating.
   - Trees: VU Meter per section (split at 16 bars) on the lower layer; in chorus bars a Shockwave on beats 1 and 3 above it.
+  - Pixel Forest (group of Pixel Forest 1-5, 10x5 matrices): exactly the Trees effects (`TREE_LIKE`), same palettes (user, 2026-10-25).
   - Trees Stars (TreeStar 1-4): Shockwave on beats 2 and 4 in choruses (ping-pong with the Trees), a Ripple per bar
     outside choruses, a Pinwheel under each chorus run, and a full-size Shockwave on the first beat of each section.
   - Mega Tree: a shader per Trees block (rotated per section story from the user's own favourites: verses Continua

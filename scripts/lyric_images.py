@@ -38,6 +38,7 @@ IMG_SUB = "Images/LyricIcons"
 # tree whose pixels are much further apart across than down, so its pictures are drawn twice as tall as wide
 SIZES = {"Mega Tree": (20, 38), "Matrix": (56, 56), "Matrix 2": (28, 28)}
 ENTRANCE_S = 0.4
+REPEAT_S = 20.0     # the same picture again only after this long (This Christmas showed the tree 12 times)
 BLACK_LEVEL = 30    # Transparent Black: pixels with R+G+B at or below this are not drawn, so the effects below show
 # (start XC, start YC, start scale) -> centre at 100%; XC/YC are percent of the model
 ENTRANCES = {"grow": (0, 0, 20), "slide-left": (-100, 0, 100), "slide-right": (100, 0, 100),
@@ -115,10 +116,14 @@ def find_hits(phrases: list[dict], icons: dict[str, str]) -> list[tuple[float, s
 def schedule(hits, hold: float) -> list[tuple[float, float, str, str]]:
     """Non-overlapping (start, end, key, emoji) pictures, each landing on its word."""
     out: list[tuple[float, float, str, str]] = []
+    last: dict[str, float] = {}
     for t, key, emoji in hits:
         start = max(0.0, t - ENTRANCE_S * 0.75)    # the entrance finishes as the word is sung
         if out and start < out[-1][1] + 0.3:
             continue
+        if start - last.get(emoji, -REPEAT_S) < REPEAT_S:   # "Christmas" every line: leave room for other words
+            continue
+        last[emoji] = start
         out.append((start, start + hold, key, emoji))
     return out
 
