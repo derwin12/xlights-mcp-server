@@ -85,8 +85,8 @@ def word_phonemes(word: str) -> list[tuple[str, int]]:
     w = re.sub(r"[^a-z']", "", word.lower())
     if not w:
         return [("etc", 1)]
-    prons = _cmu.get(w)
-    if not prons:
+    prons = _cmu.get(w) or (_cmu.get(w.rstrip("'") + "g") if w.rstrip("'").endswith("in") else None)
+    if not prons:   # sung spellings like NOTHIN/DRINKIN' fall back to NOTHING/DRINKING above
         return [("etc", 1)]
     out: list[tuple[str, int]] = []
     for ph in prons[0]:
@@ -224,7 +224,11 @@ def main() -> None:
 
     show = load_show_config(Path(args.show))
     present = {m.name for m in show.models}
-    duration_ms = int(max(p["end"] for p in phrases) * 1000) + 2000
+    import librosa
+
+    # the whole song, not just up to the last word (a faces-only sequence would otherwise stop early)
+    duration_ms = max(int(librosa.get_duration(path=args.audio) * 1000),
+                      int(max(p["end"] for p in phrases) * 1000) + 2000)
 
     spec = SequenceSpec(
         song_title=args.title, media_file=str(Path(args.audio).resolve()),

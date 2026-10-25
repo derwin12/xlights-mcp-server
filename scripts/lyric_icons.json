@@ -1,0 +1,36 @@
+{
+  "_about": "Sung word or phrase (lower case) -> emoji drawn on the Mega Tree / matrices by lyric_images.py. Artwork: Noto Emoji (Apache 2.0). Phrases are matched before single words; plurals and -in'/-ing forms match the base word.",
+
+  "love": "❤️", "heart": "❤️", "hearts": "❤️", "kiss": "💋", "broken heart": "💔", "heartbreak": "💔",
+  "cry": "😢", "tears": "😢", "smile": "😊", "laugh": "😂", "happy": "😊", "sad": "😢", "lonely": "😔", "lonelier": "😔",
+  "angel": "😇", "devil": "😈", "ring": "💍", "wedding": "💒", "baby": "👶", "dance": "💃", "two steppin": "💃",
+  "two-steppin": "💃", "party": "🎉", "dream": "💭", "sleep": "😴", "eyes": "👀", "hand": "✋", "hands": "👐",
+
+  "star": "⭐", "lone star": "⭐", "stars": "✨", "shine": "✨", "sparkle": "✨", "moon": "🌙", "night": "🌙",
+  "sun": "☀️", "sunshine": "☀️", "morning": "🌅", "sunrise": "🌅", "sunset": "🌇", "rain": "🌧️", "storm": "⛈️",
+  "thunder": "⚡", "lightning": "⚡", "rainbow": "🌈", "cloud": "☁️", "wind": "🌬️", "snow": "❄️", "snowflake": "❄️",
+  "ice": "🧊", "cold": "🥶", "fire": "🔥", "fireside": "🔥", "burn": "🔥", "hot": "🔥", "mountain": "⛰️",
+  "mountains": "🏔️", "ocean": "🌊", "sea": "🌊", "river": "🌊", "wave": "🌊", "beach": "🏖️", "island": "🏝️",
+  "flower": "🌸", "rose": "🌹", "tree": "🌲", "forest": "🌲", "leaf": "🍂", "world": "🌎", "earth": "🌎",
+
+  "christmas tree": "🎄", "christmas": "🎄", "santa": "🎅", "santa claus": "🎅", "sleigh": "🛷", "reindeer": "🦌",
+  "rudolph": "🦌", "present": "🎁", "presents": "🎁", "gift": "🎁", "gifts": "🎁", "bell": "🔔", "bells": "🔔",
+  "jingle": "🔔", "snowman": "⛄", "candle": "🕯️", "cookie": "🍪", "cookies": "🍪", "mistletoe": "🌿", "holly": "🌿",
+  "elf": "🧝", "angels": "😇", "carol": "🎶", "caroling": "🎶", "stocking": "🧦", "chimney": "🏠", "candy cane": "🍬",
+  "candy": "🍬", "hot chocolate": "☕", "cocoa": "☕", "wreath": "🎄",
+
+  "halloween": "🎃", "pumpkin": "🎃", "ghost": "👻", "ghosts": "👻", "witch": "🧙", "spider": "🕷️", "bat": "🦇",
+  "bats": "🦇", "skeleton": "💀", "bones": "🦴", "skull": "💀", "monster": "👹", "zombie": "🧟", "vampire": "🧛",
+  "scream": "😱", "scary": "😱", "boo": "👻", "graveyard": "🪦", "grave": "🪦", "spooky": "👻", "trick or treat": "🍬",
+
+  "cowboy": "🤠", "cowgirl": "🤠", "horse": "🐎", "boots": "👢", "texas": "⭐", "whiskey": "🥃", "jack": "🥃",
+  "drinkin": "🥃", "beer": "🍺", "wine": "🍷", "truck": "🛻", "road": "🛣️", "highway": "🛣️", "mile": "🛣️",
+  "car": "🚗", "drive": "🚗", "train": "🚂", "plane": "✈️", "fly": "🕊️", "bird": "🐦", "dog": "🐕", "cat": "🐈",
+  "guitar": "🎸", "music": "🎵", "song": "🎵", "sing": "🎤", "tunes": "🎵", "blues": "🎷", "radio": "📻",
+  "piano": "🎹", "drum": "🥁", "crystal ball": "🔮", "magic": "🪄", "money": "💰", "gold": "🥇", "diamond": "💎",
+  "crown": "👑", "king": "👑", "queen": "👑", "home": "🏠", "house": "🏠", "church": "⛪", "city": "🌆",
+  "phone": "📱", "call": "📞", "letter": "💌", "time": "⏰", "clock": "⏰", "key": "🔑", "door": "🚪",
+  "rocket": "🚀", "space": "🚀", "tacos": "🌮", "taco": "🌮", "pizza": "🍕", "cake": "🎂", "birthday": "🎂",
+  "coffee": "☕", "apple": "🍎", "fish": "🐟", "lion": "🦁", "bear": "🐻", "eagle": "🦅", "flag": "🇺🇸",
+  "america": "🇺🇸", "freedom": "🗽", "peace": "☮️", "pray": "🙏", "god": "🙏", "heaven": "☁️"
+}

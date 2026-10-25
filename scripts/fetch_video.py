@@ -38,7 +38,8 @@ def info(url):
     with _ydl({"skip_download": True}) as y:
         i = y.extract_info(url, download=False)
     return {"id": i["id"], "title": i.get("title"), "duration": i.get("duration"),
-            "width": i.get("width"), "height": i.get("height"), "fps": i.get("fps")}
+            "width": i.get("width"), "height": i.get("height"), "fps": i.get("fps"),
+            "artist": i.get("artist") or i.get("creator"), "track": i.get("track"), "channel": i.get("channel")}
 
 
 def fetch(url, out_dir=DEFAULT_DIR, max_height=1080, audio=False):
