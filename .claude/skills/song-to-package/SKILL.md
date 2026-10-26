@@ -19,6 +19,11 @@ The Eclipse6 house effects are on by default (enhance_layout.py, see the eclipse
 Mega Tree/matrix shaders, Lyrics Matrix words, Trees/Stars/Arches/Outline...). The user wants this for every song ("the basic
 sequencing we did with the Eclipse videos"); `--faces-only` leaves just the singing props. The radio shows the real artist.
 For validating in xLights the user imports the .xsqz, so it needs the audio: use `--with-media` for review builds.
+**Music video on a matrix** (`--video-model "Matrix 2" --video-crop-x 12`; Matrix is 2:1 -> `--video-crop 6`): the YouTube
+video is copied to `<show>\Videos\<name>.mp4` and plays full length on that matrix instead of its shaders and lyric pictures;
+the .xsqz carries it only with `--with-media`. First used on Stella Lefty - Boston (2026-10-26).
+**Text-speak lyrics**: an uploader's description can use u/ur/im/id/idk - they replace Whisper's correct words and land on the
+Lyrics Matrix. Clean SongWork\<name>\lyrics.txt to normal spelling and `--redo fix` (Boston: 28 swaps -> 11 real ones).
 
 ## Pipeline
 `fetch_video.py` -> `transcribe_words.py` (Whisper small.en) -> `lyrics_align.py` -> `song_to_singing_props.py` -> `package_xsqz.py --no-media`

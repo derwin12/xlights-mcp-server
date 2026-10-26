@@ -180,6 +180,10 @@ def main() -> None:
     ap.add_argument("--redo", choices=STEPS[1:], help="re-run from this step on")
     ap.add_argument("--no-preview", action="store_true", help="skip the house preview video")
     ap.add_argument("--no-images", action="store_true", help="no lyric pictures on the Mega Tree / matrices")
+    ap.add_argument("--video-model", help='matrix that plays the YouTube video (e.g. "Matrix 2") instead of shaders and '
+                                          "pictures; the video goes to <show>/Videos/<name>.mp4")
+    ap.add_argument("--video-crop", type=int, default=0, help="percent cropped from the video's top and bottom (2:1 Matrix: 6)")
+    ap.add_argument("--video-crop-x", type=int, default=0, help="percent cropped from the video's left and right (4:3 Matrix 2: 12)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("XLIGHTS_AUTOMATION_PORT", 49914)),
                     help="xLights automation port (49914 on this machine)")
     a = ap.parse_args()
@@ -211,6 +215,12 @@ def main() -> None:
         else:
             download = fetch_video.fetch(a.url, audio=True)
             shutil.copyfile(download.with_suffix(".mp3"), mp3)
+    clip = show / "Videos" / f"{name}.mp4"
+    if a.video_model and not clip.exists():
+        if local:
+            sys.exit("--video-model needs a YouTube link")
+        clip.parent.mkdir(exist_ok=True)
+        shutil.copyfile(fetch_video.fetch(a.url, audio=True), clip)
     if todo("words", words):
         run(str(HERE / "transcribe_words.py"), str(mp3), str(words), "--wav16k", str(wav), "--separate")
     lyrics = Path(a.lyrics) if a.lyrics else work / "lyrics.txt"
@@ -242,8 +252,11 @@ def main() -> None:
         run(*cmd)
         if not a.faces_only:
             xsq.with_suffix(".xsq.bak").unlink(missing_ok=True)   # enhance_layout keeps the first .bak
-            run(str(HERE / "enhance_layout.py"), str(xsq), "--artist",
-                a.radio_artist or artist or meta.get("channel") or "")
+            cmd = [str(HERE / "enhance_layout.py"), str(xsq), "--artist", a.radio_artist or artist or meta.get("channel") or ""]
+            if a.video_model:
+                cmd += ["--video", f"Videos/{clip.name}", "--video-model", a.video_model,
+                        "--video-crop", str(a.video_crop), "--video-crop-x", str(a.video_crop_x)]
+            run(*cmd)
         built = True
     if built or STEPS.index("sections") >= redo:
         cmd = [str(HERE / "song_sections.py"), str(xsq), str(fixed), "--artist", a.artist or artist or "",
@@ -255,7 +268,10 @@ def main() -> None:
         except subprocess.CalledProcessError:   # no Genius page: the sequence is still usable
             print("sections: skipped (Genius page not found; pass --genius-url)")
         if not a.faces_only and not a.no_images:
-            run(str(HERE / "lyric_images.py"), str(xsq), str(fixed), "--show", str(show))
+            cmd = [str(HERE / "lyric_images.py"), str(xsq), str(fixed), "--show", str(show)]
+            if a.video_model:   # the video matrix gets no pictures on top
+                cmd += ["--models", *[m for m in ("Mega Tree", "Matrix", "Matrix 2") if m != a.video_model]]
+            run(*cmd)
     if not a.no_preview and (todo("preview", video) or built):
         render_preview(xsq, video, a.port, show_secs(xsq))
     if todo("package", pkg):

@@ -38,6 +38,10 @@ def main():
         for rel in sorted(set(re.findall(r"E_TEXTCTRL_Pictures_Filename=([^,<]+)", text))):
             if not Path(rel).is_absolute() and (show / rel).exists():
                 z.write(show / rel, rel)
+        if not a.no_media:   # a music video on a matrix is the artist's media too: only in review builds
+            for rel in sorted(set(re.findall(r"E_FILEPICKERCTRL_Video_Filename=([^,<]+)", text))):
+                if not Path(rel).is_absolute() and (show / rel).exists():
+                    z.write(show / rel, rel)
     print(f"wrote {out} ({out.stat().st_size} bytes)")
 
 

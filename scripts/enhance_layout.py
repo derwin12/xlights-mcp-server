@@ -260,7 +260,7 @@ MH_PRE_MS = 1000  # longest lead-in a head gets to reach its next pose
 
 VIDEO = ("E_CHECKBOX_SynchroniseWithAudio=0,E_CHECKBOX_Video_AspectRatio=0,E_CHECKBOX_Video_TransparentBlack=0,"
          "E_CHOICE_Video_DurationTreatment=Normal,E_FILEPICKERCTRL_Video_Filename={f},E_TEXTCTRL_SampleSpacing=0,"
-         "E_TEXTCTRL_Video_CropBottom={cb},E_TEXTCTRL_Video_CropLeft=0,E_TEXTCTRL_Video_CropRight=100,E_TEXTCTRL_Video_CropTop={ct},"
+         "E_TEXTCTRL_Video_CropBottom={cb},E_TEXTCTRL_Video_CropLeft={cl},E_TEXTCTRL_Video_CropRight={cr},E_TEXTCTRL_Video_CropTop={ct},"
          "E_TEXTCTRL_Video_Starttime=0.0,E_TEXTCTRL_Video_TransparentBlack=0,T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,"
          "T_SLIDER_EffectLayerMix=0")
 MEGA_TREE_LIKE = ("Mega Tree", "Matrix", "Matrix 2")
@@ -488,6 +488,7 @@ def main() -> None:
     ap.add_argument("--video", help="video file path as the show folder sees it (e.g. Videos/Name.mp4) to play on --video-model")
     ap.add_argument("--video-model", default="Matrix", help="matrix that plays --video instead of the Mega Tree effects")
     ap.add_argument("--video-crop", type=int, default=0, help="percent of the video height cropped from the top and from the bottom (fits 16:9 on a 2:1 matrix)")
+    ap.add_argument("--video-crop-x", type=int, default=0, help="percent of the video width cropped from the left and from the right (fits 16:9 on a 4:3 matrix: 12)")
     ap.add_argument("--no-lyrics", action="store_true", help="leave the Lyrics Matrix blank")
     ap.add_argument("--no-radio", action="store_true", help="leave the Radio_EFL model blank")
     ap.add_argument("--no-heads", action="store_true", help="leave the moving heads (MH-1..MH-8) blank")
@@ -634,8 +635,9 @@ def main() -> None:
             sq.add("FloodLights", 0, "On", bars[idx[0]], bars[idx[-1] + 1], ON, bar_pal[idx[0]])
 
     if args.video:
-        sq.add(args.video_model, 0, "Video", 0, dur, VIDEO.format(f=args.video, ct=100 - args.video_crop, cb=args.video_crop), "verse", "text")
-        print(f"video: {args.video} on {args.video_model} (crop {args.video_crop}% top and bottom)")
+        sq.add(args.video_model, 0, "Video", 0, dur, VIDEO.format(f=args.video, ct=100 - args.video_crop, cb=args.video_crop,
+                                                                   cl=args.video_crop_x, cr=100 - args.video_crop_x), "verse", "text")
+        print(f"video: {args.video} on {args.video_model} (crop {args.video_crop}% top/bottom, {args.video_crop_x}% left/right)")
     if not args.no_lyrics:
         add_lyric_words(sq, tree_blocks, bars)
     if not args.no_radio:
