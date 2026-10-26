@@ -142,13 +142,13 @@ ON = "E_TEXTCTRL_Eff_On_Start=100,E_TEXTCTRL_Eff_On_End=100,E_CHECKBOX_On_Shimme
 SPARKLE_COLOR = {"verse": "#40C0FF", "chorusA": "#00FF50", "chorusB": "#FF2030", "peak": "#FF2030", "outro": "#00FF50"}
 
 
-def palette_text(c1: str, *more: str, sparkle: bool = False, sparkle_color: str = "#FFFFFF") -> str:
+def palette_text(c1: str, *more: str, sparkle: bool = False, sparkle_color: str = "#FFFFFF", brightness: int = 100) -> str:
     cols = [c1, *more]
     btn = cols + ["#FFFFFF"] * (8 - len(cols))
     chk = [1] * len(cols) + [0] * (8 - len(cols))
     parts = [f"C_BUTTON_Palette{i + 1}={c}" for i, c in enumerate(btn)]
     parts += [f"C_CHECKBOX_Palette{i + 1}={v}" for i, v in enumerate(chk)]
-    parts += ["C_SLIDER_Brightness=100", "C_SLIDER_Contrast=0", "C_SLIDER_SparkleFrequency=0",
+    parts += [f"C_SLIDER_Brightness={brightness}", "C_SLIDER_Contrast=0", "C_SLIDER_SparkleFrequency=0",
               f"C_CHECKBOX_MusicSparkles={1 if sparkle else 0}", f"C_COLOURPICKERCTRL_SparklesColour={sparkle_color}"]
     return ",".join(parts)
 
@@ -190,6 +190,8 @@ class Seq:
             elif role == "lyricbg":
                 c = PALETTES[key]["flood"][0].lstrip("#")
                 cols = ("#" + "".join(f"{int(int(c[k:k + 2], 16) * 0.3):02X}" for k in (0, 2, 4)),)
+            elif role == "video":
+                cols = ("#FFFFFF",)
             elif role == "treetint":
                 cols = (PALETTES[key]["trees"][0],)
             elif role.startswith("tint"):
@@ -197,8 +199,9 @@ class Seq:
             else:
                 cols = PALETTES[key][role]
             # no sparkles on the floods; the tint layer is Average-blended over the shader, so they go on the shader layer
-            sparkle = role not in ("treetint", "flood", "text", "lyric", "lyricbg")
-            ET.SubElement(self.pals, "ColorPalette").text = palette_text(*cols, sparkle=sparkle, sparkle_color=SPARKLE_COLOR[key])
+            sparkle = role not in ("treetint", "flood", "text", "lyric", "lyricbg", "video")
+            ET.SubElement(self.pals, "ColorPalette").text = palette_text(*cols, sparkle=sparkle, sparkle_color=SPARKLE_COLOR[key],
+                                                                         brightness=VIDEO_BRIGHTNESS if role == "video" else 100)
             self._pal[(key, role)] = len(self.pals) - 1
         return self._pal[(key, role)]
 
@@ -268,6 +271,7 @@ VIDEO = ("E_CHECKBOX_SynchroniseWithAudio=0,E_CHECKBOX_Video_AspectRatio=0,E_CHE
          "E_TEXTCTRL_Video_Starttime=0.0,E_TEXTCTRL_Video_TransparentBlack=0,T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,"
          "T_SLIDER_EffectLayerMix=0")
 MEGA_TREE_LIKE = ("Mega Tree", "Matrix", "Matrix 2")
+VIDEO_BRIGHTNESS = 150  # music videos are filmed dark; the user sets the video effect's brightness to 150 (default 100)
 RADIO = "Radio_EFL"
 RADIO_TEXT = ("E_CHECKBOX_Text_Color_PerWord=0,E_CHECKBOX_Text_PixelOffsets=0,E_CHOICE_Text_Count=none,E_CHOICE_Text_Dir=left,"
               "E_CHOICE_Text_Effect=normal,E_CHOICE_Text_Font=5-5x5 Mono,E_FILEPICKERCTRL_Text_File=,"
@@ -367,6 +371,71 @@ def add_radio(sq: Seq, bars, bar_kind, bar_peak, bar_pal, tree_blocks, title: st
         if bar_peak[i] and chorus:
             sq.add_sub(RADIO, "5x5 Spinners", "Strobe", q[2], q[3], STROBE, "peak", "arches")
     print(f"radio: '{text}'")
+
+
+# Showstopper props, sequenced the way the user drives SS Spinner L/M/R in E:/2023/ShowFolder3D (196 songs, mostly
+# ~1 s SingleStrand chases on one or two submodels, short Shockwaves on the rings, On flashes on the Starburst, Pinwheels).
+# Submodels per job, the user's most used first: chase = lines that read as motion, ring = round shapes for shockwaves,
+# flash = centre pieces for a quick On.
+SS_PROPS = {
+    "SS Spinner": {
+        "chase": ["08 Big Petals", "33 Outer Swirl Left", "34 Outer Swirl Right", "01 Cascading Arches", "17 Spinners - Short",
+                  "26 Arrows-Long", "43 Small Hearts", "23 Fireworks", "18 Swirl Right", "19 Swirl Left"],
+        "ring": ["13 All Rings", "60 Center Rings", "04 Circles (V)", "35 Outer Rings"],
+        "flash": ["57 Starburst", "66 Stars", "25 Snowflake"]},
+    "SS Snowflake": {
+        "chase": ["CW Outer Spirals", "CC Outer Spirals", "Spinner", "Even Spinners", "Odd Spinners", "Fountain", "Outward Spin",
+                  "Large Fireworks", "Twist and Pop", "Rotating Outer Leaves"],
+        "ring": ["All Rings", "Rings", "Pulsing Rosette", "Exploding Snowflake"],
+        "flash": ["Starburst", "Center Stars", "Fireworks", "Center Snowflake"]},
+}
+SS_CHASE = ("E_CHECKBOX_Chase_Group_All=1,E_CHOICE_Chase_Type1={d},E_CHOICE_Fade_Type=From Head,E_CHOICE_SingleStrand_Colors=Palette,"
+            "E_CHOICE_SingleStrand_FX=Fireworks 1D,E_CHOICE_SingleStrand_FX_Palette=* Colors Only,E_CHOICE_Skips_Direction=Left,"
+            "E_NOTEBOOK_SSEFFECT_TYPE=Chase,E_SLIDER_Color_Mix1=40,E_SLIDER_FX_Intensity=128,E_SLIDER_FX_Speed=128,"
+            "E_SLIDER_Number_Chases=1,E_SLIDER_Skips_Advance=0,E_SLIDER_Skips_BandSize=1,E_SLIDER_Skips_SkipSize=1,"
+            "E_SLIDER_Skips_StartPos=1,E_TEXTCTRL_Chase_Offset=0.0,E_TEXTCTRL_Chase_Rotations=1.0")
+SS_SHOCK = ("B_CHOICE_BufferStyle=Default,E_CHECKBOX_Shockwave_Blend_Edges=1,E_CHECKBOX_Shockwave_Scale=1,E_NOTEBOOK_Shockwave=Position,"
+            "E_SLIDER_Shockwave_Accel=0,E_SLIDER_Shockwave_CenterX=50,E_SLIDER_Shockwave_CenterY=50,E_SLIDER_Shockwave_Cycles=1,"
+            "E_SLIDER_Shockwave_End_Radius=104,E_SLIDER_Shockwave_End_Width=62,E_SLIDER_Shockwave_Start_Radius=1,"
+            "E_SLIDER_Shockwave_Start_Width=5,T_TEXTCTRL_Fadeout=0.2")
+SS_PINWHEEL = ("E_CHECKBOX_Pinwheel_Rotation=0,E_CHOICE_Pinwheel_3D=Sweep,E_CHOICE_Pinwheel_Style=New Render Method,E_SLIDER_PinwheelXC=0,"
+               "E_SLIDER_PinwheelYC=0,E_SLIDER_Pinwheel_ArmSize=100,E_SLIDER_Pinwheel_Arms=3,E_SLIDER_Pinwheel_Offset=0,"
+               "E_SLIDER_Pinwheel_Speed=19,E_SLIDER_Pinwheel_Thickness=34,E_SLIDER_Pinwheel_Twist=0,T_TEXTCTRL_Fadeout=0.3")
+
+
+def add_showstoppers(sq: Seq, bars, bar_kind, bar_peak, bar_pal, secs, seed: str) -> None:
+    """SS Spinner / SS Snowflake submodels, sprinkled in: each section picks two chase submodels (alternating per bar,
+    2 beats each), choruses add ring Shockwaves on beats 2 and 4, peak bars flash a centre piece on the downbeat and
+    each chorus run opens with a Pinwheel over its first bar. The song name seeds the choice of submodels."""
+    import random
+    rng = random.Random(seed + "/showstoppers")
+    n = len(bars) - 1
+    count = 0
+    for model, subs in SS_PROPS.items():
+        pairs = {}
+        for i in range(n):
+            q = [bars[i] + (bars[i + 1] - bars[i]) * k // 4 for k in range(5)]
+            sec = next((s for s in secs if s[0] <= bars[i] < s[1]), secs[-1])
+            if sec[0] not in pairs:
+                pairs[sec[0]] = (rng.sample(subs["chase"], 2), rng.choice(subs["ring"]), rng.choice(subs["flash"]))
+            (a, b), ring, flash = pairs[sec[0]]
+            pk, chorus = bar_pal[i], bar_kind[i] == "chorus"
+            sub = a if i % 2 == 0 else b
+            d = "Left-Right" if (i // 2) % 2 == 0 else "Right-Left"
+            sq.add_sub(model, sub, "SingleStrand", q[0], q[2], SS_CHASE.format(d=d), pk, "outline")
+            count += 1
+            if chorus:
+                for k in (1, 3):
+                    sq.add_sub(model, ring, "Shockwave", q[k], min(q[k] + 550, q[k + 1]), SS_SHOCK, pk, "stars")
+                    count += 1
+                if i == 0 or bar_kind[i - 1] != "chorus":
+                    sq.add_sub(model, "**WHOLE " + ("SPINNER" if model == "SS Spinner" else "FLAKE"), "Pinwheel",
+                               q[0], bars[i + 1], SS_PINWHEEL, pk, "arches")
+                    count += 1
+            if bar_peak[i]:
+                sq.add_sub(model, flash, "On", q[0], min(q[0] + 500, q[1]), "E_TEXTCTRL_Eff_On_End=0", pk, "topper")
+                count += 1
+    print(f"showstoppers: {count} effects on {', '.join(SS_PROPS)}")
 
 
 def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
@@ -493,12 +562,15 @@ def main() -> None:
     ap.add_argument("--video-model", default="Matrix", help="matrix that plays --video instead of the Mega Tree effects")
     ap.add_argument("--video-crop", type=int, default=0, help="percent of the video height cropped from the top and from the bottom (fits 16:9 on a 2:1 matrix)")
     ap.add_argument("--video-crop-x", type=int, default=0, help="percent of the video width cropped from the left and from the right (fits 16:9 on a 4:3 matrix: 12)")
+    ap.add_argument("--video-brightness", type=int, default=VIDEO_BRIGHTNESS, help="colour-panel brightness of the video effect")
     ap.add_argument("--no-lyrics", action="store_true", help="leave the Lyrics Matrix blank")
     ap.add_argument("--no-radio", action="store_true", help="leave the Radio_EFL model blank")
+    ap.add_argument("--no-showstoppers", action="store_true", help="leave SS Spinner / SS Snowflake blank")
     ap.add_argument("--no-heads", action="store_true", help="leave the moving heads (MH-1..MH-8) blank")
     ap.add_argument("--look-video", help="the song's video: its main hues become the colour story (song_look.py)")
     ap.add_argument("--classic-look", action="store_true", help="old fixed colour story and shader rotation for every song")
     args = ap.parse_args()
+    globals()["VIDEO_BRIGHTNESS"] = args.video_brightness
     if not args.classic_look:
         pick, settings = song_look.shader_rotation(Path(args.xsq).stem)
         SHADER_PICK.update(pick)
@@ -654,7 +726,7 @@ def main() -> None:
 
     if args.video:
         sq.add(args.video_model, 0, "Video", 0, dur, VIDEO.format(f=args.video, ct=100 - args.video_crop, cb=args.video_crop,
-                                                                   cl=args.video_crop_x, cr=100 - args.video_crop_x), "verse", "text")
+                                                                   cl=args.video_crop_x, cr=100 - args.video_crop_x), "verse", "video")
         print(f"video: {args.video} on {args.video_model} (crop {args.video_crop}% top/bottom, {args.video_crop_x}% left/right)")
     if not args.no_lyrics:
         add_lyric_words(sq, tree_blocks, bars)
@@ -662,6 +734,8 @@ def main() -> None:
         add_radio(sq, bars, bar_kind, bar_peak, bar_pal, tree_blocks, ET.parse(xsq).getroot().findtext("head/song") or xsq.stem, dur, args.artist)
     if not args.no_heads:
         add_moving_heads(sq, bars, bar_kind, bar_peak, secs)
+    if not args.no_showstoppers:
+        add_showstoppers(sq, bars, bar_kind, bar_peak, bar_pal, secs, xsq.stem)
 
     # hide model/group rows with no effects (timing rows stay as they are)
     used = {e.get("name") for e in sq.eff if e.get("type") == "model" and e.findall(".//Effect")}

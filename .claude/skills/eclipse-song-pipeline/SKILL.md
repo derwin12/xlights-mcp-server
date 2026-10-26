@@ -61,6 +61,14 @@ Result: 4 lyric tracks (Tree Male/Female, Red/Green bulb, voices split by pitch)
     another name showed nothing). Check with `render_model_frame` on "Lyrics Matrix" at a sung word.
   - Rows that gain effects are made visible (Matrix, Matrix 2 and Lyrics Matrix are hidden in the layout).
   - Master view row order (`order_rows`): model groups first (A-Z), then models (A-Z), timing rows keep their slots. User requirement.
+  - SS Spinner / SS Snowflake (`add_showstoppers`, `--no-showstoppers` skips; 2026-10-26): styled on the user's SS Spinner
+    L/M/R sequences in E:/2023/ShowFolder3D (196 songs: mostly ~1 s SingleStrand chases on submodels, short Shockwaves on
+    rings, On flashes on Starburst, Pinwheels; settings copied). Each section picks two chase submodels (alternating per bar,
+    beats 1-2), choruses add a ring Shockwave on beats 2 and 4 and a whole-prop Pinwheel on the first chorus bar, peak bars
+    flash a centre piece. Seeded by song name. ShowFolder3D has no SS Snowflake, so it mirrors the spinner on its own
+    submodels. Both props are drawn with pixel size 1, so they look faint in the house preview; `render_model_frame` on
+    them is the check (pick a time inside a chase).
+  - Video on a matrix: colour-panel brightness 150 (`--video-brightness`, user 2026-10-26; videos are filmed dark).
   - Icicles: On wash per 2 bars. FloodLights: On wash per section.
   - Music Sparkles ("Sparkles reflect music") on, frequency 0, in a contrasting colour per section, on everything except the
     FloodLights and the Mega Tree tint layer. Unused rows hidden. Length stretched to the audio.
