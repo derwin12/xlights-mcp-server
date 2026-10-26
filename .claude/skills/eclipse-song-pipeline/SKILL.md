@@ -72,6 +72,11 @@ Result: 4 lyric tracks (Tree Male/Female, Red/Green bulb, voices split by pitch)
     **Pre-positioning (user requirement):** before every beam a dark pan/tilt-only Moving Head effect with "Link end position to
     next Moving Head effect" (`E_CHECKBOX_MHLinkToNext=1`, via `mh_settings(..., link=True)`) is placed in the gap, up to 1 s long,
     so the head is already in place when the light comes on. No colour/dimmer in it (a dark dimmer in a linked effect leaked a beam).
+- **Per-song look (2026-10-26, user: songs looked identical)**: `song_look.py`. The song's name (xsq stem) seeds the shader
+  rotation from `scripts/shader_pool.json` (42 of the user's own shaders + Mega Tree settings mined from E:/2023/ShowFolder3D,
+  grouped calm/drive/peak by measured motion; dark or flat ones dropped after a Mega Tree test render); `--look-video <mp4>`
+  turns the video's main hues into the colour story (song_to_package passes it automatically). `--classic-look` = the old
+  fixed look. Regenerating an older song from its .bak now changes its shaders too.
 - Default colour story = the pilot's (amber verses, red/gold and green choruses, white/gold peak, red/white outro).
   Per song, pass `--palettes story.json`, e.g. `{"chorusA": {"trees": ["#2060FF", "#A0D0FF"]}, "sparkle": {"chorusA": "#FFD700"}}`
   (roles: outline, trees, arches, stars, topper, icicles, flood, megatree - 3 colours; sparkle keys are the section names

@@ -1,0 +1,257 @@
+{
+ "_about": "Mega Tree / Matrix shader pool for enhance_layout.py. Settings = the user's own most common Mega Tree settings (E:/2023/ShowFolder3D sequences, transitions/layer keys and timing-track curves removed). mood: calm = verses/outro, drive = choruses, peak = loudest choruses; grouped by measured motion on the 20x75 Mega Tree (2026-10-26).",
+ "shaders": {
+  "Aurora": {
+   "mood": "calm",
+   "motion": 8.79,
+   "settings": "E_CHOICE_SHADERXYZZY_uColMode=Alternate Color Palette (3 used) ,E_CHECKBOX_SHADERXYZZY_uContRot=1,E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uZoom=100,E_SLIDER_SHADERXYZZY_uRotate=0,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Continua Variation": {
+   "mood": "calm",
+   "motion": 28.42,
+   "settings": "E_SLIDER_Shader_Speed=500,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=-20,T_CHECKBOX_Canvas=1",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Fly Through": {
+   "mood": "calm",
+   "motion": 13.83,
+   "settings": "E_SLIDER_SHADERXYZZY_c0=0,E_SLIDER_SHADERXYZZY_c1=0,E_SLIDER_SHADERXYZZY_c2=0,E_SLIDER_SHADERXYZZY_j=50,E_SLIDER_SHADERXYZZY_k=50,E_SLIDER_Shader_Speed=300,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Colour Diffusion Flow": {
+   "mood": "calm",
+   "motion": 10.1,
+   "settings": "E_SLIDER_SHADERXYZZY_color1=45,E_SLIDER_SHADERXYZZY_color2=100,E_SLIDER_SHADERXYZZY_cycle1=133,E_SLIDER_SHADERXYZZY_cycle2=22,E_SLIDER_SHADERXYZZY_depthX=85,E_SLIDER_SHADERXYZZY_depthY=25,E_SLIDER_SHADERXYZZY_loopcycle=8500,E_SLIDER_SHADERXYZZY_nudge=1,E_SLIDER_SHADERXYZZY_rate1=190,E_SLIDER_SHADERXYZZY_rate2=60,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0",
+   "from": "8 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "SSL Fog": {
+   "mood": "calm",
+   "motion": 4.64,
+   "settings": "E_SLIDER_SHADERXYZZY_cloudDensity=100,E_SLIDER_SHADERXYZZY_cloudHeight=250,E_SLIDER_SHADERXYZZY_noisiness=35,E_SLIDER_SHADERXYZZY_speed=10,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Wisps": {
+   "mood": "calm",
+   "motion": 6.91,
+   "settings": "E_SLIDER_SHADERXYZZY_amp=10,E_SLIDER_SHADERXYZZY_glow=-600,E_SLIDER_SHADERXYZZY_lines=10000,E_SLIDER_SHADERXYZZY_linesStartOffset=50,E_SLIDER_SHADERXYZZY_mod1=100,E_SLIDER_SHADERXYZZY_mod2=1,E_SLIDER_SHADERXYZZY_posX=50,E_SLIDER_SHADERXYZZY_posY=50,E_SLIDER_SHADERXYZZY_rotateCanvas=0,E_SLIDER_SHADERXYZZY_scroll=0,E_SLIDER_SHADERXYZZY_twisted=1,E_SLIDER_SHADERXYZZY_zoom=1100,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "6 songs in E:/2023/ShowFolder3D"
+  },
+  "Sleepy Rays": {
+   "mood": "calm",
+   "motion": 11.52,
+   "settings": "E_TEXTCTRL_Shader_LeadIn=0",
+   "from": "6 songs in E:/2023/ShowFolder3D"
+  },
+  "Galaxy": {
+   "mood": "calm",
+   "motion": 16.8,
+   "settings": "E_SLIDER_SHADERXYZZY_COLOUR=100,E_SLIDER_SHADERXYZZY_CentralCore=90,E_SLIDER_SHADERXYZZY_CoreHaze=6,E_SLIDER_SHADERXYZZY_CoreIntensity=90,E_SLIDER_SHADERXYZZY_DustDensity=2,E_SLIDER_SHADERXYZZY_ITERATIONS=8000,E_SLIDER_SHADERXYZZY_SPIRAL=87,E_SLIDER_SHADERXYZZY_STRUCTURE=65,E_SLIDER_SHADERXYZZY_ShiftX=50,E_SLIDER_SHADERXYZZY_ShiftY=50,E_SLIDER_SHADERXYZZY_StarsBlue=51,E_SLIDER_SHADERXYZZY_StarsGreen=56,E_SLIDER_SHADERXYZZY_TIMEOFFSET=0,E_SLIDER_SHADERXYZZY_TINT=100,E_SLIDER_SHADERXYZZY_ZOOM=10,E_SLIDER_Shader_Speed=500,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=60",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "PPD Glowing Marbling Black": {
+   "mood": "drive",
+   "motion": 35.59,
+   "settings": "E_SLIDER_SHADERXYZZY_WarpX=60,E_SLIDER_SHADERXYZZY_WarpY=60,E_SLIDER_SHADERXYZZY_Width=1000,E_SLIDER_SHADERXYZZY_Zoom=100,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=12",
+   "from": "8 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Tie Die": {
+   "mood": "calm",
+   "motion": 10.1,
+   "settings": "E_CHECKBOX_SHADERXYZZY_uContRot=1,E_CHOICE_SHADERXYZZY_uColMode=Shader Defaults ,E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uOffsetX=0,E_SLIDER_SHADERXYZZY_uOffsetY=0,E_SLIDER_SHADERXYZZY_uRotate=0,E_SLIDER_SHADERXYZZY_uZoom=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0,E_VALUECURVE_Shader_Speed=Active=TRUE|Id=ID_VALUECURVE_Shader_Speed|Type=Custom|Min=-1000.00|Max=1000.00|RV=TRUE|Values=0.00:0.64;1.00:0.41|",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Twin Rays": {
+   "mood": "drive",
+   "motion": 38.65,
+   "settings": "E_SLIDER_SHADERXYZZY_Count=930,E_SLIDER_SHADERXYZZY_posX=16,E_SLIDER_SHADERXYZZY_posY=-33,E_SLIDER_SHADERXYZZY_soft=1,E_SLIDER_SHADERXYZZY_width=14,E_SLIDER_Shader_Speed=447,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0,E_VALUECURVE_SHADERXYZZY_rate=Active=TRUE|Id=ID_VALUECURVE_SHADERXYZZY_rate|Type=Square|Min=-6.00|Max=6.00|P1=6.00|P2=-6.00|P3=2.00|RV=TRUE|",
+   "from": "8 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Mobius Spiral": {
+   "mood": "drive",
+   "motion": 28.7,
+   "settings": "E_SLIDER_SHADERXYZZY_mx=14,E_SLIDER_SHADERXYZZY_rate=-74,E_SLIDER_Shader_Speed=-82,E_TEXTCTRL_Shader_LeadIn=1",
+   "from": "10 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "PPD Flower Glow": {
+   "mood": "drive",
+   "motion": 20.36,
+   "settings": "E_SLIDER_Shader_Speed=460,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=-36",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Plasma Sparkle": {
+   "mood": "drive",
+   "motion": 26.82,
+   "settings": "E_SLIDER_SHADERXYZZY_level=2,E_SLIDER_SHADERXYZZY_speed=100,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Zoom=16,E_VALUECURVE_Shader_Offset_Y=Active=TRUE|Id=ID_VALUECURVE_Shader_Offset_Y|Type=Sine|Min=-100.00|Max=100.00|P2=-34.00|P3=20.00|TO=75|RV=TRUE|",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Hex Vortex": {
+   "mood": "drive",
+   "motion": 58.57,
+   "settings": "E_SLIDER_SHADERXYZZY_B=25,E_SLIDER_SHADERXYZZY_G=12,E_SLIDER_SHADERXYZZY_R=5,E_SLIDER_SHADERXYZZY_centerX=50,E_SLIDER_SHADERXYZZY_centerY=50,E_SLIDER_SHADERXYZZY_rotation=5,E_SLIDER_SHADERXYZZY_shapeX=200,E_SLIDER_SHADERXYZZY_shapeY=225,E_SLIDER_SHADERXYZZY_speed=50,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Vortex V2": {
+   "mood": "drive",
+   "motion": 10.98,
+   "settings": "B_CHOICE_BufferStyle=Per Preview,E_SLIDER_SHADERXYZZY_ColorB=0,E_SLIDER_SHADERXYZZY_ColorG=0,E_SLIDER_SHADERXYZZY_Filling=296,E_SLIDER_SHADERXYZZY_Half=0,E_SLIDER_SHADERXYZZY_Rotation=50,E_SLIDER_SHADERXYZZY_Stripe=2900,E_SLIDER_Shader_Speed=302,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=100,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=100",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Spiral Over Beams": {
+   "mood": "drive",
+   "motion": 53.75,
+   "settings": "E_CHOICE_SHADERXYZZY_uColMode=Alternate Color Palette (3 used) ,E_SLIDER_SHADERXYZZY_uCore=26,E_SLIDER_SHADERXYZZY_uIntensity=64,E_SLIDER_SHADERXYZZY_uOffsetX=0,E_SLIDER_SHADERXYZZY_uOffsetY=0,E_SLIDER_SHADERXYZZY_uZoom=861,E_SLIDER_Shader_Speed=52,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=100,E_TEXTCTRL_Shader_Zoom=5",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Blue Streaks": {
+   "mood": "drive",
+   "motion": 20.22,
+   "settings": "B_CHOICE_BufferStyle=Per Preview,B_CHOICE_BufferTransform=Flip Horizontal,B_CHOICE_PerPreviewCamera=2D,E_CHECKBOX_SHADERXYZZY_uContRot=1,E_CHOICE_SHADERXYZZY_uColMode=Shader Defaults ,E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uOffsetX=0,E_SLIDER_SHADERXYZZY_uOffsetY=0,E_SLIDER_SHADERXYZZY_uRotate=737,E_SLIDER_SHADERXYZZY_uZoom=500,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Zoom Loop": {
+   "mood": "drive",
+   "motion": 36.72,
+   "settings": "E_SLIDER_SHADERXYZZY_fieldOfView=1250,E_SLIDER_SHADERXYZZY_horizonDistance=10000,E_SLIDER_SHADERXYZZY_peaks=1000,E_SLIDER_SHADERXYZZY_rotationSpeed=100,E_SLIDER_SHADERXYZZY_smoothStep1X=20,E_SLIDER_SHADERXYZZY_smoothStep1Y=36,E_SLIDER_SHADERXYZZY_smoothStep2X=89,E_SLIDER_SHADERXYZZY_smoothStep2Y=100,E_SLIDER_SHADERXYZZY_zoomSpeed=10,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=100,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "16 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Creation by Silexars": {
+   "mood": "calm",
+   "motion": 18.62,
+   "settings": "B_CHOICE_BufferStyle=Per Model Default,E_CHOICE_SHADERXYZZY_uColMode=Shader Defaults ,E_SLIDER_SHADERXYZZY_uIntensity=100,E_SLIDER_SHADERXYZZY_uOffsetX=0,E_SLIDER_SHADERXYZZY_uOffsetY=0,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "14 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Cosplay": {
+   "mood": "drive",
+   "motion": 60.53,
+   "settings": "B_CHOICE_BufferStyle=Per Preview,E_SLIDER_SHADERXYZZY_dotSize=2,E_SLIDER_SHADERXYZZY_iteration=10000,E_SLIDER_SHADERXYZZY_posX=50,E_SLIDER_SHADERXYZZY_posY=50,E_SLIDER_SHADERXYZZY_rotateCanvas=0,E_SLIDER_SHADERXYZZY_rotateMultiplier=1000,E_SLIDER_SHADERXYZZY_rotateParticles=100,E_SLIDER_SHADERXYZZY_speed=5,E_SLIDER_SHADERXYZZY_xAmp=30,E_SLIDER_SHADERXYZZY_xFactor=20,E_SLIDER_SHADERXYZZY_yAmp=10,E_SLIDER_SHADERXYZZY_yFactor=0,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=22",
+   "from": "9 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "6mm Inversion": {
+   "mood": "drive",
+   "motion": 25.49,
+   "settings": "E_SLIDER_SHADERXYZZY_CX=200,E_SLIDER_SHADERXYZZY_CY=-200,E_SLIDER_Shader_Speed=640,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=-28,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=17",
+   "from": "9 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "70tiesMaelstrom": {
+   "mood": "drive",
+   "motion": 38.48,
+   "settings": "B_CHOICE_BufferStyle=Default,E_SLIDER_SHADERXYZZY_iMouseX=50,E_SLIDER_SHADERXYZZY_iMouseY=50,E_SLIDER_Shader_Speed=1000,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "RGBLaserGlobe": {
+   "mood": "calm",
+   "motion": 12.73,
+   "settings": "E_TEXTCTRL_Shader_LeadIn=0",
+   "from": "6 songs in E:/2023/ShowFolder3D"
+  },
+  "Kaleidolines": {
+   "mood": "drive",
+   "motion": 36.87,
+   "settings": "E_TEXTCTRL_Shader_LeadIn=0",
+   "from": "4 songs in E:/2023/ShowFolder3D"
+  },
+  "Spirograph Spectrum": {
+   "mood": "drive",
+   "motion": 28.84,
+   "settings": "B_CHOICE_BufferStyle=Default,E_SLIDER_SHADERXYZZY_centerX=0,E_SLIDER_SHADERXYZZY_centerY=0,E_SLIDER_SHADERXYZZY_freq=920,E_SLIDER_SHADERXYZZY_loops=2329,E_SLIDER_SHADERXYZZY_nudge=73,E_SLIDER_SHADERXYZZY_radius1=13,E_SLIDER_SHADERXYZZY_radius2=67,E_SLIDER_SHADERXYZZY_rate=-10,E_SLIDER_SHADERXYZZY_thickness=1",
+   "from": "4 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "String Art": {
+   "mood": "drive",
+   "motion": 69.02,
+   "settings": "E_SLIDER_SHADERXYZZY_freq2=93,E_SLIDER_SHADERXYZZY_loop1=388,E_SLIDER_SHADERXYZZY_loop2=600,E_SLIDER_SHADERXYZZY_radius1=-50,E_SLIDER_SHADERXYZZY_radius2=50,E_SLIDER_SHADERXYZZY_rate=-54,E_SLIDER_SHADERXYZZY_scale=275,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0,E_VALUECURVE_SHADERXYZZY_freq1=Active=TRUE|Id=ID_VALUECURVE_SHADERXYZZY_freq1|Type=Ramp|Min=0.00|Max=100.00|P1=67.00|P2=48.00|RV=TRUE|",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Candywrap": {
+   "mood": "drive",
+   "motion": 74.23,
+   "settings": "B_CHOICE_BufferStyle=Per Preview,E_CHECKBOX_SHADERXYZZY_invert=0,E_SLIDER_SHADERXYZZY_cycle=40,E_SLIDER_SHADERXYZZY_hue=33,E_SLIDER_SHADERXYZZY_loops=6100,E_SLIDER_SHADERXYZZY_rate=125,E_SLIDER_SHADERXYZZY_scale=8400,E_SLIDER_SHADERXYZZY_thickness=70,E_SLIDER_SHADERXYZZY_tint=10,E_SLIDER_SHADERXYZZY_warp=250,E_SLIDER_Shader_Speed=500,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=60",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Audio - PlasmaLike": {
+   "mood": "drive",
+   "motion": 23.2,
+   "settings": "E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "RainbowGlowRing": {
+   "mood": "drive",
+   "motion": 23.74,
+   "settings": "E_SLIDER_SHADERXYZZY_amp=17,E_SLIDER_SHADERXYZZY_centerX=50,E_SLIDER_SHADERXYZZY_centerY=50,E_SLIDER_SHADERXYZZY_glow=144,E_SLIDER_SHADERXYZZY_noise=26,E_SLIDER_SHADERXYZZY_radius1=16,E_SLIDER_SHADERXYZZY_radius2=38,E_SLIDER_SHADERXYZZY_rate=149,E_SLIDER_SHADERXYZZY_warp=370,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "DotzMatrix": {
+   "mood": "drive",
+   "motion": 21.42,
+   "settings": "E_SLIDER_SHADERXYZZY_C1=100,E_SLIDER_SHADERXYZZY_C2=75,E_SLIDER_SHADERXYZZY_C3=27,E_SLIDER_SHADERXYZZY_brightness=-33,E_SLIDER_SHADERXYZZY_gamma=50,E_SLIDER_SHADERXYZZY_pulse=33,E_SLIDER_SHADERXYZZY_radius=33,E_SLIDER_SHADERXYZZY_rate=23,E_SLIDER_SHADERXYZZY_scale=-3600,E_SLIDER_SHADERXYZZY_scroll=2,E_SLIDER_SHADERXYZZY_seed=60100,E_SLIDER_SHADERXYZZY_soft=6,E_SLIDER_Shader_Speed=10,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=20",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "WaveLines": {
+   "mood": "peak",
+   "motion": 31.13,
+   "settings": "E_SLIDER_SHADERXYZZY_amp=0,E_SLIDER_SHADERXYZZY_glow=50,E_SLIDER_SHADERXYZZY_mod2=0,E_SLIDER_SHADERXYZZY_posX=51,E_SLIDER_SHADERXYZZY_posY=50,E_SLIDER_SHADERXYZZY_rotateCanvas=17,E_SLIDER_SHADERXYZZY_scroll=0,E_SLIDER_SHADERXYZZY_zoom=1918,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0,E_VALUECURVE_SHADERXYZZY_twisted=Active=TRUE|Id=ID_VALUECURVE_twisted|Type=Custom|Min=-30.00|Max=30.00|RV=TRUE|Values=0.00:0.00;0.77:0.03;0.92:0.17;1.00:0.26|",
+   "from": "11 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Circles Bouncing Blue": {
+   "mood": "drive",
+   "motion": 31.47,
+   "settings": "E_SLIDER_Shader_Speed=130,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=12",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Black Cherry Cosmos": {
+   "mood": "peak",
+   "motion": 14.17,
+   "settings": "E_SLIDER_SHADERXYZZY_mouseX=0,E_SLIDER_SHADERXYZZY_mouseY=0,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=68",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "InnerDimensionalMatrix": {
+   "mood": "peak",
+   "motion": 14.89,
+   "settings": "E_CHECKBOX_SHADERXYZZY_color=1,E_CHECKBOX_SHADERXYZZY_mirror=0,E_SLIDER_SHADERXYZZY_cycle=100,E_SLIDER_SHADERXYZZY_flash=750,E_SLIDER_SHADERXYZZY_line=1,E_SLIDER_SHADERXYZZY_rate=100,E_SLIDER_SHADERXYZZY_scale=100,E_SLIDER_SHADERXYZZY_seed1=15500,E_SLIDER_SHADERXYZZY_seed2=64900,E_SLIDER_SHADERXYZZY_zoom=17,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "enhance_layout (user's Mega Tree settings)"
+  },
+  "Great Ball of Fire": {
+   "mood": "peak",
+   "motion": 13.81,
+   "settings": "B_CHOICE_BufferStyle=Default,E_SLIDER_SHADERXYZZY_density=250,E_SLIDER_SHADERXYZZY_depth=10,E_SLIDER_SHADERXYZZY_offsetX=0,E_SLIDER_SHADERXYZZY_offsetY=60,E_SLIDER_SHADERXYZZY_rateX=-300,E_SLIDER_SHADERXYZZY_rateY=-50,E_SLIDER_SHADERXYZZY_rateZ=300,E_SLIDER_SHADERXYZZY_rotation=0,E_SLIDER_SHADERXYZZY_size=350",
+   "from": "8 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Plasma Emitter": {
+   "mood": "peak",
+   "motion": 71.87,
+   "settings": "E_CHECKBOX_SHADERXYZZY_fractnoise=0,E_SLIDER_SHADERXYZZY_centerX=0,E_SLIDER_SHADERXYZZY_centerY=-50,E_SLIDER_SHADERXYZZY_contour=1600,E_SLIDER_SHADERXYZZY_detail=5,E_SLIDER_SHADERXYZZY_edge=50,E_SLIDER_SHADERXYZZY_freq=800,E_SLIDER_SHADERXYZZY_grow=100,E_SLIDER_SHADERXYZZY_hue=100,E_SLIDER_SHADERXYZZY_nudge=0,E_SLIDER_SHADERXYZZY_radius1=10,E_SLIDER_SHADERXYZZY_radius2=50,E_SLIDER_SHADERXYZZY_rate=250,E_SLIDER_SHADERXYZZY_rays=10000,E_SLIDER_SHADERXYZZY_tint=100,E_SLIDER_Shader_Speed=200,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "9 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Fire World": {
+   "mood": "calm",
+   "motion": 7.42,
+   "settings": "E_SLIDER_SHADERXYZZY_mouseX=0,E_SLIDER_SHADERXYZZY_mouseY=0,E_SLIDER_Shader_Speed=107,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=-84",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "PPD Light Show": {
+   "mood": "peak",
+   "motion": 43.9,
+   "settings": "E_SLIDER_Shader_Speed=500,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=12,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "7 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Spacels": {
+   "mood": "peak",
+   "motion": 37.86,
+   "settings": "E_CHECKBOX_SHADERXYZZY_nebula=0,E_SLIDER_SHADERXYZZY_brightness=25,E_SLIDER_SHADERXYZZY_density=75,E_SLIDER_SHADERXYZZY_depth=25,E_SLIDER_SHADERXYZZY_distfading=25,E_SLIDER_SHADERXYZZY_morph=89,E_SLIDER_SHADERXYZZY_moveX=0,E_SLIDER_SHADERXYZZY_moveY=0,E_SLIDER_SHADERXYZZY_rate=3,E_SLIDER_SHADERXYZZY_saturation=50,E_SLIDER_SHADERXYZZY_zoom=250,E_SLIDER_Shader_Speed=100,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=0",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "PPD Lazer Rope": {
+   "mood": "peak",
+   "motion": 46.31,
+   "settings": "E_SLIDER_SHADERXYZZY_blue_line_w=0,E_SLIDER_SHADERXYZZY_blue_speed=2597,E_SLIDER_SHADERXYZZY_magent_speed=1419,E_SLIDER_SHADERXYZZY_magenta_line_w=2,E_SLIDER_Shader_Speed=282,E_TEXTCTRL_Shader_LeadIn=0",
+   "from": "6 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  },
+  "Circuits Explorer": {
+   "mood": "peak",
+   "motion": 24.82,
+   "settings": "E_SLIDER_SHADERXYZZY_centerX=0,E_SLIDER_SHADERXYZZY_centerY=0,E_SLIDER_SHADERXYZZY_focus=500,E_SLIDER_SHADERXYZZY_glow=-7040,E_SLIDER_SHADERXYZZY_intensity=5,E_SLIDER_SHADERXYZZY_loops=1280,E_SLIDER_SHADERXYZZY_pulse=900,E_SLIDER_SHADERXYZZY_rate=200,E_SLIDER_SHADERXYZZY_zoom=55,E_SLIDER_Shader_Speed=380,E_TEXTCTRL_Shader_LeadIn=0,E_TEXTCTRL_Shader_Offset_X=0,E_TEXTCTRL_Shader_Offset_Y=0,E_TEXTCTRL_Shader_Zoom=44",
+   "from": "5 songs in E:/2023/ShowFolder3D (Mega Tree)"
+  }
+ }
+}

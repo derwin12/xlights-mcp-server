@@ -5,7 +5,10 @@ Stars/Mega Topper Shockwaves on chorus downbeats, Icicles and FloodLights washes
 Existing elements (Faces, moving heads, timing tracks) are not touched; groups missing from
 the sequence are inserted in sorted position among the model rows.
 
-    python scripts/enhance_layout.py SEQ.xsq [--mp3 SEQ.mp3] [--palettes story.json]
+    python scripts/enhance_layout.py SEQ.xsq [--mp3 SEQ.mp3] [--look-video VIDEO.mp4] [--palettes story.json]
+
+Each song gets its own look (song_look.py): --look-video takes the colour story from the song's video, and the song's
+name picks its shaders from shader_pool.json. --classic-look keeps the old fixed colours and shader rotation.
 
 Re-running restores nothing by itself: copy SEQ.xsq.bak over SEQ.xsq first (the .bak is only made once).
 """
@@ -22,6 +25,7 @@ from xlights_mcp.audio.beats import detect_beats
 from xlights_mcp.audio.structure import detect_structure
 
 from grid_tracks import add_grid_tracks
+import song_look
 
 # section palette -> prop role -> (color1, color2); same colour story per section, different shades per prop
 PALETTES = {
@@ -492,7 +496,21 @@ def main() -> None:
     ap.add_argument("--no-lyrics", action="store_true", help="leave the Lyrics Matrix blank")
     ap.add_argument("--no-radio", action="store_true", help="leave the Radio_EFL model blank")
     ap.add_argument("--no-heads", action="store_true", help="leave the moving heads (MH-1..MH-8) blank")
+    ap.add_argument("--look-video", help="the song's video: its main hues become the colour story (song_look.py)")
+    ap.add_argument("--classic-look", action="store_true", help="old fixed colour story and shader rotation for every song")
     args = ap.parse_args()
+    if not args.classic_look:
+        pick, settings = song_look.shader_rotation(Path(args.xsq).stem)
+        SHADER_PICK.update(pick)
+        SHADERS.update(settings)
+        print("shaders:", "; ".join(f"{k} {', '.join(v)}" for k, v in pick.items()))
+        hues = song_look.video_hues(Path(args.look_video)) if args.look_video else []
+        if hues:
+            story, sparkle = song_look.make_story([h for h, _ in hues])
+            for key, roles in story.items():
+                PALETTES[key].update(roles)
+            SPARKLE_COLOR.update(sparkle)
+            print("colours from the video, hues", [round(h) for h, _ in hues])
     if args.palettes:
         over = json.load(open(args.palettes, encoding="utf-8"))
         SPARKLE_COLOR.update(over.pop("sparkle", {}))

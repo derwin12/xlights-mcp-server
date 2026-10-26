@@ -253,6 +253,8 @@ def main() -> None:
         if not a.faces_only:
             xsq.with_suffix(".xsq.bak").unlink(missing_ok=True)   # enhance_layout keeps the first .bak
             cmd = [str(HERE / "enhance_layout.py"), str(xsq), "--artist", a.radio_artist or artist or meta.get("channel") or ""]
+            if not local:   # the song's own video sets the colour story
+                cmd += ["--look-video", str(fetch_video.fetch(a.url, audio=True))]
             if a.video_model:
                 cmd += ["--video", f"Videos/{clip.name}", "--video-model", a.video_model,
                         "--video-crop", str(a.video_crop), "--video-crop-x", str(a.video_crop_x)]
