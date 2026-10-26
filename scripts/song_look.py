@@ -62,13 +62,15 @@ def _section(a: float, b: float | None, soft: bool = False, deep: bool = False) 
     """Roles for one section: hue a leads, b is the accent (None = white)."""
     v = 0.85 if deep else 1.0
     acc = (lambda s=1.0: WHITE) if b is None else (lambda s=1.0: hx(b, s, v))
-    if soft:  # verses: shades of one hue
-        return {"outline": (hx(a, 0.9), hx(a, 0.35)), "trees": (hx(a, 0.35), hx(a, 0.8)),
-                "arches": (hx(a + 15), hx(a, 0.5)), "stars": (hx(a, 0.6), WHITE), "topper": (WHITE, hx(a, 0.9)),
-                "icicles": (hx(a, 0.3), hx(a, 0.12)), "flood": (hx(a, 1, 0.75), hx(a, 0.9)),
-                "megatree": (hx(a, 0.75), hx(a + 20), hx(a, 0.2))}
-    return {"outline": (hx(a, 1, v), acc()), "trees": (hx(a, 1, v), acc(0.8)), "arches": (acc(), hx(a, 0.6, v)),
-            "stars": (acc(0.5), WHITE), "topper": (WHITE, hx(a, 1, v)), "icicles": (hx(a, 0.5), WHITE),
+    # pale shades (saturation < 0.7) look washed out on the house (user, Boston amber verses: "muted and blah"), so
+    # variety comes from neighbouring hues at full saturation; white only as a second colour
+    if soft:  # verses: one hue and its neighbours
+        return {"outline": (hx(a), hx(a + 20)), "trees": (hx(a), hx(a - 15)),
+                "arches": (hx(a + 15), hx(a)), "stars": (hx(a + 20), WHITE), "topper": (WHITE, hx(a)),
+                "icicles": (hx(a, 0.75), hx(a + 25)), "flood": (hx(a, 1, 0.75), hx(a)),
+                "megatree": (hx(a), hx(a + 25), hx(a - 20))}
+    return {"outline": (hx(a, 1, v), acc()), "trees": (hx(a, 1, v), acc()), "arches": (acc(), hx(a, 1, v)),
+            "stars": (acc(0.8), WHITE), "topper": (WHITE, hx(a, 1, v)), "icicles": (hx(a, 0.8), WHITE),
             "flood": (hx(a, 1, 0.7), hx(a, 1, v)), "megatree": (hx(a, 1, v), acc(), WHITE)}
 
 
@@ -79,7 +81,7 @@ def make_story(hues: list[float]) -> tuple[dict, dict]:
     h3 = hues[2] if len(hues) > 2 else h1 - 45
     peak = _section(h2, h1)
     peak.update(outline=(WHITE, hx(h2)), arches=(WHITE, hx(h1)), stars=(WHITE, hx(h2)), topper=(hx(h2), WHITE),
-                icicles=(hx(h2, 0.2), WHITE), flood=(hx(h2, 0.4), WHITE), megatree=(WHITE, hx(h2), hx(h1)))
+                icicles=(hx(h2, 0.6), WHITE), flood=(hx(h2, 0.8), WHITE), megatree=(WHITE, hx(h2), hx(h1)))
     story = {"verse": _section(h1, None, soft=True), "chorusA": _section(h1, h2), "chorusB": _section(h2, h3),
              "peak": peak, "outro": _section(h3, None, deep=True)}
     lead = {"verse": h1, "chorusA": h1, "chorusB": h2, "peak": h2, "outro": h3}
