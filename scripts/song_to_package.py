@@ -180,6 +180,7 @@ def main() -> None:
     ap.add_argument("--redo", choices=STEPS[1:], help="re-run from this step on")
     ap.add_argument("--no-preview", action="store_true", help="skip the house preview video")
     ap.add_argument("--no-images", action="store_true", help="no lyric pictures on the Mega Tree / matrices")
+    ap.add_argument("--classic-look", action="store_true", help="old fixed colours/shaders (songs built before 2026-10-26)")
     ap.add_argument("--video-model", help='matrix that plays the YouTube video (e.g. "Matrix 2") instead of shaders and '
                                           "pictures; the video goes to <show>/Videos/<name>.mp4")
     ap.add_argument("--video-crop", type=int, default=0, help="percent cropped from the video's top and bottom (2:1 Matrix: 6)")
@@ -253,7 +254,9 @@ def main() -> None:
         if not a.faces_only:
             xsq.with_suffix(".xsq.bak").unlink(missing_ok=True)   # enhance_layout keeps the first .bak
             cmd = [str(HERE / "enhance_layout.py"), str(xsq), "--artist", a.radio_artist or artist or meta.get("channel") or ""]
-            if not local:   # the song's own video sets the colour story
+            if a.classic_look:
+                cmd += ["--classic-look"]
+            elif not local:   # the song's own video sets the colour story
                 cmd += ["--look-video", str(fetch_video.fetch(a.url, audio=True))]
             if a.video_model:
                 cmd += ["--video", f"Videos/{clip.name}", "--video-model", a.video_model,
