@@ -22,6 +22,9 @@ For validating in xLights the user imports the .xsqz, so it needs the audio: use
 **Music video on a matrix** (`--video-model "Matrix 2" --video-crop-x 12`; Matrix is 2:1 -> `--video-crop 6`): the YouTube
 video is copied to `<show>\Videos\<name>.mp4` and plays full length on that matrix instead of its shaders and lyric pictures;
 the .xsqz carries it only with `--with-media`. First used on Stella Lefty - Boston (2026-10-26).
+**Line-dance dancer** (`--dancer`, scripts/shuffle_dancer.py): a 14x23 ASCII-art pixel dancer (red shirt, pink heart,
+jeans) on the Mega Tree and Matrix doing the sung calls - "to the right/left" steps across, "now kick" kicks, "walk it by
+yourself" walks and turns - each pose on its word. Frames are full-model PNGs in Images/Dancer. First used on Cupid Shuffle (2026-10-28).
 **Text-speak lyrics**: an uploader's description can use u/ur/im/id/idk - they replace Whisper's correct words and land on the
 Lyrics Matrix. Clean SongWork\<name>\lyrics.txt to normal spelling and `--redo fix` (Boston: 28 swaps -> 11 real ones).
 

@@ -12,6 +12,7 @@ Steps (each skipped when its output exists, so a re-run resumes; --redo words|fi
            enhance_layout.py (house effects as for the Eclipse6 songs; --faces-only skips it)
   sections song_sections.py          -> "Sections" timing track (Verse 1 / Chorus 1 ...) from Genius, ...\genius.txt
            lyric_images.py           -> pictures of sung words (lyric_icons.json) on Mega Tree / Matrix / Matrix 2
+           shuffle_dancer.py         -> (--dancer) pixel dancer doing the line-dance calls on Mega Tree / Matrix
                                         (--no-images or --faces-only skip it)
   preview  xLights automation        -> <show>\HousePreviewVideos\<name>.mp4  (xLights must be running on --port with
            the show folder open and the house preview selected; skipped otherwise; --no-preview)
@@ -180,6 +181,8 @@ def main() -> None:
     ap.add_argument("--redo", choices=STEPS[1:], help="re-run from this step on")
     ap.add_argument("--no-preview", action="store_true", help="skip the house preview video")
     ap.add_argument("--no-images", action="store_true", help="no lyric pictures on the Mega Tree / matrices")
+    ap.add_argument("--dancer", action="store_true", help="pixel dancer doing the Cupid Shuffle calls (to the right / "
+                    "left / kick / walk it by yourself) on the Mega Tree and Matrix (shuffle_dancer.py)")
     ap.add_argument("--classic-look", action="store_true", help="old fixed colours/shaders (songs built before 2026-10-26)")
     ap.add_argument("--video-model", help='matrix that plays the YouTube video (e.g. "Matrix 2") instead of shaders and '
                                           "pictures; the video goes to <show>/Videos/<name>.mp4")
@@ -274,9 +277,15 @@ def main() -> None:
             print("sections: skipped (Genius page not found; pass --genius-url)")
         if not a.faces_only and not a.no_images:
             cmd = [str(HERE / "lyric_images.py"), str(xsq), str(fixed), "--show", str(show)]
+            song_icons = fixed.parent / "lyric_icons.json"    # per-song pictures (e.g. a parody's shop sign)
+            if song_icons.exists():
+                cmd += ["--icons", str(HERE / "lyric_icons.json"), str(song_icons)]
             if a.video_model:   # the video matrix gets no pictures on top
                 cmd += ["--models", *[m for m in ("Mega Tree", "Matrix", "Matrix 2") if m != a.video_model]]
             run(*cmd)
+        if a.dancer and not a.faces_only:
+            run(str(HERE / "shuffle_dancer.py"), str(xsq), str(fixed), "--show", str(show),
+                "--models", *[m for m in ("Mega Tree", "Matrix") if m != a.video_model])
     if not a.no_preview and (todo("preview", video) or built):
         render_preview(xsq, video, a.port, show_secs(xsq))
     if todo("package", pkg):

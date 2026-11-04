@@ -45,11 +45,19 @@ ENTRANCES = {"grow": (0, 0, 20), "slide-left": (-100, 0, 100), "slide-right": (1
              "rise": (0, -100, 100), "drop": (0, 100, 100)}
 
 
+def is_file(icon: str) -> bool:
+    return icon.lower().endswith(".png")
+
+
 def emoji_code(e: str) -> str:
+    if is_file(e):
+        return Path(e).stem
     return "_".join(f"{ord(c):04x}" for c in e if ord(c) != 0xFE0F)
 
 
 def icon_png(emoji: str) -> Image.Image | None:
+    if is_file(emoji):
+        return Image.open(emoji).convert("RGBA")
     code = emoji_code(emoji)
     path = CACHE / f"{code}.png"
     if not path.exists():
@@ -117,15 +125,23 @@ def schedule(hits, hold: float) -> list[tuple[float, float, str, str]]:
     """Non-overlapping (start, end, key, emoji) pictures, each landing on its word."""
     out: list[tuple[float, float, str, str]] = []
     last: dict[str, float] = {}
-    for t, key, emoji in hits:
-        start = max(0.0, t - ENTRANCE_S * 0.75)    # the entrance finishes as the word is sung
-        if out and start < out[-1][1] + 0.3:
-            continue
-        if start - last.get(emoji, -REPEAT_S) < REPEAT_S:   # "Christmas" every line: leave room for other words
-            continue
-        last[emoji] = start
-        out.append((start, start + hold, key, emoji))
-    return out
+    # a song's own pictures (e.g. a parody's shop sign) go first; emoji fill in around them, cut short to fit
+    for group in ([h for h in hits if is_file(h[2])], [h for h in hits if not is_file(h[2])]):
+        for t, key, emoji in group:
+            start = max(0.0, t - ENTRANCE_S * 0.75)    # the entrance finishes as the word is sung
+            end = start + hold
+            nxt = min((s for s, *_ in out if s >= start), default=None)
+            if nxt is not None and not is_file(emoji):
+                end = min(end, nxt - 0.3)
+                if end - start < 1.2:
+                    continue
+            if any(start < e + 0.3 and s < end + 0.3 for s, e, *_ in out):
+                continue
+            if not is_file(emoji) and start - last.get(emoji, -REPEAT_S) < REPEAT_S:   # "Christmas" every line:
+                continue                                                          # leave room for other words
+            last[emoji] = start
+            out.append((start, end, key, emoji))
+    return sorted(out)
 
 
 def entrance_for(emoji: str) -> str:
@@ -193,7 +209,8 @@ def main() -> None:
     ap.add_argument("xsq")
     ap.add_argument("phrases", help="fixed.json from lyrics_align.py")
     ap.add_argument("--show", default=r"F:\ShowFolderAI")
-    ap.add_argument("--icons", default=str(HERE / "lyric_icons.json"))
+    ap.add_argument("--icons", nargs="+", default=[str(HERE / "lyric_icons.json")],
+                    help="icon lists, later ones win; a value ending .png is a picture file (relative to its list)")
     ap.add_argument("--hold", type=float, default=2.4, help="seconds each picture stays up")
     ap.add_argument("--models", nargs="+", default=list(SIZES))
     a = ap.parse_args()
@@ -201,7 +218,10 @@ def main() -> None:
 
     show = Path(a.show)
     phrases = [p for p in json.load(open(a.phrases, encoding="utf-8")) if p["words"]]
-    icons = json.load(open(a.icons, encoding="utf-8"))
+    icons = {}
+    for f in a.icons:
+        for k, v in json.load(open(f, encoding="utf-8")).items():
+            icons[k] = str(Path(f).parent / v) if is_file(v) else v
     events = schedule(find_hits(phrases, icons), a.hold)
     sq = Xsq(Path(a.xsq))
     placed = []
@@ -226,7 +246,8 @@ def main() -> None:
         el.insert(0, pic)       # first EffectLayer is the top one
     sq.save()
     for start, key, emoji, move in placed:
-        print(f"  {int(start // 60)}:{start % 60:05.2f}  {emoji}  {key:<14} {move}")
+        print(f"  {int(start // 60)}:{start % 60:05.2f}  {Path(emoji).name if is_file(emoji) else emoji}  "
+              f"{key:<14} {move}")
     print(f"{len(placed)} pictures on {', '.join(a.models)}")
 
 
