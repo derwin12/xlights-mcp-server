@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import random
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -260,6 +261,9 @@ class Seq:
 
 MH_MODELS = [f"MH-{i}" for i in range(1, 9)]
 MH_PAN = 90.0  # pan 90 keeps every beam in the camera plane: tilt is then the left/right lean (positive = right)
+MH_FRONT = 20.0  # lean moves turn pan this far toward the audience (pan 0): 70 leaning right, 110 leaning left, so
+                 # beams point slightly frontward instead of straight across (user, 2026-11-03); through tilt 0 the pan
+                 # passes 90 while the beam is upright, so it never swings backward
 MH_WHITE = (0.0, 0.0, 1.0)
 MH_ANY = "#FFFFFF"
 MH_PRE_MS = 1000  # longest lead-in a head gets to reach its next pose
@@ -407,7 +411,7 @@ def add_showstoppers(sq: Seq, bars, bar_kind, bar_peak, bar_pal, secs, seed: str
     """SS Spinner / SS Snowflake submodels, sprinkled in: each section picks two chase submodels (alternating per bar,
     2 beats each), choruses add ring Shockwaves on beats 2 and 4, peak bars flash a centre piece on the downbeat and
     each chorus run opens with a Pinwheel over its first bar. The song name seeds the choice of submodels."""
-    import random
+
     rng = random.Random(seed + "/showstoppers")
     n = len(bars) - 1
     count = 0
@@ -438,10 +442,28 @@ def add_showstoppers(sq: Seq, bars, bar_kind, bar_peak, bar_pal, secs, seed: str
     print(f"showstoppers: {count} effects on {', '.join(SS_PROPS)}")
 
 
-def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
-    """A few white moving-head moves tied to the sections: a soft fan 'pool' in verses, a sweep on each section
-    change, left/right bank ping-pong on chorus beats, a skyward strobe burst on peak-chorus downbeats and a
-    converge-and-fade over the last two bars. Heads are dark between effects."""
+MH_VERSE = ("fan", "sway", "breathe", "banks", "circle", "swivel")
+MH_CHORUS = ("pingpong", "cross", "chase", "pump", "scissor", "spin", "wave")
+# Pan patterns, copied from the user's own MH sequences in E:/2023/ShowFolder3D (Beautiful People, The Hockey Song):
+# tilt held at 45, pan swept -50 <-> +50 around pan 0 (facing the audience) once per beat (300-500 ms), or a full turn
+# -180 <-> +180 in 600-1300 ms, the direction alternating.
+MH_PAN_TILT = 45.0
+MH_SWEEP = 50.0
+MH_PAN_MAX_DEG_S = 120.0  # fastest pan a real head does smoothly; a full turn per 0.9 s looked fake (user, 2026-11-01)
+
+
+def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None = None) -> None:
+    """White moving-head moves tied to the sections: a 'pool' in verses, a sweep on each section change, a beat
+    pattern in choruses, a skyward strobe burst on peak-chorus downbeats and a converge-and-fade over the last two
+    bars. Heads are dark between effects. Lean moves use pan 90 -/+ MH_FRONT (tilt = left/right lean, beam turned
+    slightly toward the audience) except in
+    the pan patterns, which follow the user's own MH sequences (tilt 45, pan around 0): verse circle (a full pan turn
+    over 2 bars) and swivel (pan -50 <-> +50 per bar), chorus spin (a half turn per bar, odd/even heads opposite) and
+    wave (pan -50 <-> +50 per beat). No pan move is faster than MH_PAN_MAX_DEG_S.
+
+    With a seed (the song name) every section draws its verse pattern from MH_VERSE, its chorus pattern from
+    MH_CHORUS and its sweep direction, never repeating the previous section's pick, so songs and sections move
+    differently. seed None (--classic-look) keeps the original fan / ping-pong / outside-in sweep throughout."""
     from video_beams_to_xsq import mh_settings  # full xLights key set, so the effects survive export/import
 
     n = len(bars) - 1
@@ -451,13 +473,23 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
     def fan(i):  # -1 (leftmost head) .. +1 (rightmost)
         return (i - 3.5) / 3.5
 
-    plan = [[] for _ in MH_MODELS]  # per head: (start, end, tilt0, tilt1, dimmer)
+    plan = [[] for _ in MH_MODELS]  # per head: (start, end, tilt0, tilt1, dimmer, pan0, pan1)
 
-    def put(i, start, end, t0, t1, dimmer):
-        plan[i].append((start, end, t0, t1, dimmer))
+    def lean_pan(t):  # pan for a lean move at signed tilt t (positive = right): turned MH_FRONT toward the audience
+        return MH_PAN - MH_FRONT * ((t > 0) - (t < 0))
 
-    def emit(i, start, end, t0, t1, dimmer, link=False):
-        settings = mh_settings(MH_PAN, MH_PAN, t0, t1, MH_WHITE, "Dimmer: " + dimmer if dimmer else "", link=link)
+    def put(i, start, end, t0, t1, dimmer, p0=None, p1=None):
+        if p0 is None:  # a lean move (tilt = left/right lean)
+            p0, p1 = lean_pan(t0), lean_pan(t1)
+        p1 = p0 if p1 is None else p1
+        span = MH_PAN_MAX_DEG_S * (end - start) / 1000
+        if abs(p1 - p0) > span:  # too fast for the motors: a smaller swing around the same centre
+            mid, half = (p0 + p1) / 2, span / 2 * (1 if p1 > p0 else -1)
+            p0, p1 = mid - half, mid + half
+        plan[i].append((start, end, t0, t1, dimmer, p0, p1))
+
+    def emit(i, start, end, t0, t1, dimmer, p0=MH_PAN, p1=MH_PAN, link=False):
+        settings = mh_settings(p0, p1, t0, t1, MH_WHITE, "Dimmer: " + dimmer if dimmer else "", link=link)
         el = sq.layers(MH_MODELS[i])
         if not el.findall("EffectLayer"):
             ET.SubElement(el, "EffectLayer")
@@ -482,13 +514,48 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
     if n >= 6:
         kind[n - 2] = kind[n - 1] = "outro"
 
+    # per section: (verse pattern, chorus pattern, sweep outside-in?)
+    rng = random.Random(seed + "/heads") if seed else None
+    style, last = [], ("fan", "pingpong")
+    for _ in secs:
+        if rng:
+            v = rng.choice([p for p in MH_VERSE if p != last[0]])
+            c = rng.choice([p for p in MH_CHORUS if p != last[1]])
+            style.append((v, c, rng.random() < 0.5))
+            last = (v, c)
+        else:
+            style.append(("fan", "pingpong", True))
+
+    def sec_of(i):
+        return max([k for k, (s0, *_) in enumerate(secs) if s0 <= bars[i] + 1] or [0])
+
     pool_run = []
 
     def flush_pool():
-        for k in range(0, len(pool_run), 2):
+        for c, k in enumerate(range(0, len(pool_run), 2)):
             chunk = pool_run[k:k + 2]
+            s, e = bars[chunk[0]], bars[chunk[-1] + 1]
+            pat = style[sec_of(chunk[0])][0]
+            sign = 1 if c % 2 == 0 else -1
             for h in range(8):
-                put(h, bars[chunk[0]], bars[chunk[-1] + 1], fan(h) * 12, fan(h) * 12, FADE_UP_DOWN)
+                if pat == "sway":  # the whole fan leans slowly one way, back the other way next chunk
+                    put(h, s, e, fan(h) * 12 - 15 * sign, fan(h) * 12 + 15 * sign, FADE_UP_DOWN)
+                elif pat == "breathe":  # fan opens over one chunk, closes over the next
+                    lo, hi = (5, 35) if sign > 0 else (35, 5)
+                    put(h, s, e, fan(h) * lo, fan(h) * hi, FADE_UP_DOWN)
+                elif pat == "circle":  # a full pan turn over the 2 bars, odd heads the other way, back next chunk
+                    d = sign * (1 if h % 2 == 0 else -1)
+                    put(h, s, e, MH_PAN_TILT, MH_PAN_TILT, FADE_UP_DOWN, -180 * d, 180 * d)
+                elif pat == "swivel":  # a -50 <-> +50 pan sweep per bar, direction alternating
+                    for b, bi in enumerate(chunk):
+                        d = 1 if b % 2 == 0 else -1
+                        put(h, bars[bi], bars[bi + 1], MH_PAN_TILT, MH_PAN_TILT, FADE_UP_DOWN, -MH_SWEEP * d, MH_SWEEP * d)
+                elif pat == "banks" and len(chunk) == 2:  # left four on the first bar, right four on the second
+                    left = h < 4
+                    b0, b1 = (s, bars[chunk[0] + 1]) if left == (sign > 0) else (bars[chunk[0] + 1], e)
+                    put(h, b0, b1, fan(h) * 25, fan(h) * 25, FADE_UP_DOWN)
+                else:  # fan: a soft static pool
+                    put(h, s, e, fan(h) * 12, fan(h) * 12, FADE_UP_DOWN)
         pool_run.clear()
 
     count = 0
@@ -500,11 +567,43 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
             continue
         flush_pool()
         s, e = bars[i], bars[i + 1]
-        if kind[i] == "sweep":  # outside to inside over the bar
+        verse_pat, pat, inward = style[sec_of(i)]
+        if kind[i] == "sweep":  # outside to inside over the bar, or inside out
+            a, b = (55, 10) if inward else (5, 50)
             for h in range(8):
-                put(h, s, e, fan(h) * 55, fan(h) * 10, SWEEP_DIM)
+                put(h, s, e, fan(h) * a, fan(h) * b, SWEEP_DIM)
         elif kind[i] == "chorus":
             q = [s + (e - s) * k // 4 for k in range(5)]
+            if pat == "scissor" and not bar_peak[i]:  # odd and even heads cross over the whole bar, back next bar
+                d = 1 if i % 2 == 0 else -1
+                for h in range(8):
+                    sw = 30 * d * (1 if h % 2 == 0 else -1)
+                    put(h, s, e, fan(h) * 10 - sw, fan(h) * 10 + sw, SWEEP_DIM)
+                count += 1
+                continue
+            if pat in ("spin", "wave") and not bar_peak[i]:
+                # spin: a half pan turn over the bar, odd heads the other way; wave: all heads sweep pan -50 <-> +50
+                # each beat (both shrink to MH_PAN_MAX_DEG_S in put)
+                a, step = (90, 4) if pat == "spin" else (MH_SWEEP, 1)
+                for k in range(0, 4, step):
+                    for h in range(8):
+                        # the direction alternates per beat (wave) or per bar (spin), so each move starts where the last ended
+                        d = (1 if (k if step == 1 else i) % 2 == 0 else -1) * (1 if h % 2 == 0 or pat == "wave" else -1)
+                        put(h, q[k], q[k + step], MH_PAN_TILT, MH_PAN_TILT, PING_DIM, -a * d, a * d)
+                count += 1
+                continue
+            if pat == "chase":  # one head per eighth note, left to right, right to left next bar
+                eighth = [s + (e - s) * k // 8 for k in range(9)]
+                for k in range(8):
+                    if k < 2 and bar_peak[i]:
+                        continue
+                    h = k if i % 2 == 0 else 7 - k
+                    put(h, eighth[k], eighth[k + 1], fan(h) * 25, fan(h) * 25 + (10 if i % 2 == 0 else -10), PING_DIM)
+                if bar_peak[i]:
+                    for h in range(8):
+                        put(h, q[0], min(q[0] + 500, q[1]), 0, 0, BURST_DIM)
+                count += 1
+                continue
             for k in range(4):
                 if k == 0 and bar_peak[i]:
                     for h in range(8):
@@ -512,7 +611,12 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
                     continue
                 swing = 18 if (i + k) % 2 == 0 else -18
                 for h in range(8):
-                    if h % 2 == k % 2:  # heads 1,3,5,7 on beats 1,3; heads 2,4,6,8 on beats 2,4
+                    if pat == "cross":  # both banks swing across the middle and back: an X on every beat
+                        x = 25 if k % 2 == 0 else -25
+                        put(h, q[k], q[k + 1], fan(h) * x, -fan(h) * x, PING_DIM)
+                    elif pat == "pump":  # the whole fan snaps open on every beat
+                        put(h, q[k], q[k + 1], fan(h) * 5, fan(h) * 40, PING_DIM)
+                    elif h % 2 == k % 2:  # pingpong: heads 1,3,5,7 on beats 1,3; heads 2,4,6,8 on beats 2,4
                         put(h, q[k], q[k + 1], fan(h) * 20 - swing, fan(h) * 20 + swing, PING_DIM)
         elif kind[i] == "outro" and kind[i - 1] != "outro":
             for h in range(8):
@@ -523,14 +627,19 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs) -> None:
     # (the motors are slow: otherwise the beam would appear while the head is still swinging in from its last pose).
     pre = 0
     for h, effs in enumerate(plan):
-        cursor, tilt = 0, 0.0  # rest pose: pan 90, tilt 0 (straight up)
-        for start, end, t0, t1, dimmer in sorted(effs):
+        cursor, tilt, pan = 0, 0.0, MH_PAN  # rest pose: pan 90, tilt 0 (straight up)
+        for start, end, t0, t1, dimmer, p0, p1 in sorted(effs):
             if start - cursor >= 25:
-                emit(h, max(cursor, start - MH_PRE_MS), start, tilt, t0, "", link=True)
+                emit(h, max(cursor, start - MH_PRE_MS), start, tilt, t0, "", pan, p0, link=True)
                 pre += 1
-            emit(h, start, end, t0, t1, dimmer)
-            cursor, tilt = end, t1
-    print(f"moving heads: {count} non-pool bars, 8 heads, white, {pre} pre-position effects")
+            elif abs(p0 - pan) > 20:  # back to back with a different pan (pan pattern <-> pan 90): turn from where the
+                # head is toward this effect's end pan at MH_PAN_MAX_DEG_S instead of snapping
+                step = MH_PAN_MAX_DEG_S * (end - start) / 1000
+                p0, p1 = pan, pan + max(-step, min(step, p1 - pan))
+            emit(h, start, end, t0, t1, dimmer, p0, p1)
+            cursor, tilt, pan = end, t1, p1
+    used = sorted({f"{v}/{c}" for v, c, _ in style})
+    print(f"moving heads: {count} non-pool bars, 8 heads, white, {pre} pre-position effects; verse/chorus: {', '.join(used)}")
 
 
 def order_rows(sq: Seq, show_dir: Path) -> None:
@@ -733,7 +842,7 @@ def main() -> None:
     if not args.no_radio:
         add_radio(sq, bars, bar_kind, bar_peak, bar_pal, tree_blocks, ET.parse(xsq).getroot().findtext("head/song") or xsq.stem, dur, args.artist)
     if not args.no_heads:
-        add_moving_heads(sq, bars, bar_kind, bar_peak, secs)
+        add_moving_heads(sq, bars, bar_kind, bar_peak, secs, None if args.classic_look else xsq.stem)
     if not args.no_showstoppers:
         add_showstoppers(sq, bars, bar_kind, bar_peak, bar_pal, secs, xsq.stem)
 

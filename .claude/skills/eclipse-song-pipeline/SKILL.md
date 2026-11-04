@@ -77,6 +77,12 @@ Result: 4 lyric tracks (Tree Male/Female, Red/Green bulb, voices split by pitch)
     verses = soft fan "pool" fading up/down per 2 bars; first bar of each new section = sweep wide -> narrow; chorus beats =
     ping-pong (heads 1,3,5,7 on beats 1,3; 2,4,6,8 on beats 2,4, mirroring Trees/Trees Stars); peak-chorus downbeat =
     straight-up strobe burst; last 2 bars = converge and fade. `--no-heads` leaves them blank.
+    Since 2026-10-28 the song name seeds a pattern per section (never the previous section's): verse fan / sway / breathe /
+    banks, chorus pingpong / cross / chase / pump / scissor, sweep outside-in or inside-out. `--classic-look` keeps the old moves.
+    Pan patterns (2026-11-01, user: "the moving heads never pan"), copied from the user's own MH sequences in E:/2023/ShowFolder3D
+    (Beautiful People, The Hockey Song: tilt 45, pan -50 <-> +50 per beat in 300-500 ms, full turns -180 <-> +180 in 600-1300 ms):
+    verse circle (full turn over 2 bars) / swivel (-50 <-> +50 per bar), chorus spin (half turn per bar, odd/even opposite) /
+    wave (-50 <-> +50 per beat). Pan speed capped at 120 deg/s (user: full turns per beat "way too fast"). Pan 0 faces the audience; the lean patterns use pan 90 -/+ `MH_FRONT` (20: pan 70 leaning right, 110 leaning left; user 2026-11-03: beams slightly frontward, not straight left-right).
     **Pre-positioning (user requirement):** before every beam a dark pan/tilt-only Moving Head effect with "Link end position to
     next Moving Head effect" (`E_CHECKBOX_MHLinkToNext=1`, via `mh_settings(..., link=True)`) is placed in the gap, up to 1 s long,
     so the head is already in place when the light comes on. No colour/dimmer in it (a dark dimmer in a linked effect leaked a beam).
