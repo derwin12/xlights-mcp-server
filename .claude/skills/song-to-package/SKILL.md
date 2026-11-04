@@ -27,6 +27,15 @@ jeans) on the Mega Tree and Matrix doing the sung calls - "to the right/left" st
 yourself" walks and turns - each pose on its word. Frames are full-model PNGs in Images/Dancer. First used on Cupid Shuffle (2026-10-28).
 **Text-speak lyrics**: an uploader's description can use u/ur/im/id/idk - they replace Whisper's correct words and land on the
 Lyrics Matrix. Clean SongWork\<name>\lyrics.txt to normal spelling and `--redo fix` (Boston: 28 swaps -> 11 real ones).
+**Paragraph lyrics are missed**: `description_lyrics` skips lines over 80 chars, so Eclipse 6 descriptions written as
+paragraphs give no lyrics.txt and the log says "lrclib: no close match". Check the log; if so, type the lyrics into
+SongWork\<name>\lyrics.txt one sung line per row and `--redo words` (2015 Hits Santa Style: 22 phrases fixed). Words the
+aligner still gets wrong: edit fixed.json directly (keep each word's s/e, spread new words over the old span) and `--redo xsq`.
+**Trimming silence / ending early** (2015 Hits Santa Style, 2026-11-03): re-encode from the untouched original mp3 in one
+pass (`ffmpeg -ss <start> -t <len> ... -c:a libmp3lame -b:a 128k -ar <source rate>`, back up the original first), then
+`--redo words` (timings are re-measured). To only cut the end, drop the phrases past the cut from fixed.json and `--redo xsq`.
+Cut where the audio decays to digital silence, not mid-note.
+**Docker Desktop must be running** (karaokeer): `transcribe_words --separate` fails at `docker start karaokeer` otherwise.
 
 ## Pipeline
 `fetch_video.py` -> `transcribe_words.py` (Whisper small.en) -> `lyrics_align.py` -> `song_to_singing_props.py` -> `package_xsqz.py --no-media`

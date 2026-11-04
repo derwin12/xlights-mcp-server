@@ -134,6 +134,9 @@ only after the user has reviewed the render). Commit script changes only; the sh
 Matrix/Matrix 2 shaders, Lyrics Matrix words, groups-first row order); `Please-Dont-Cancel-Christmas` was dropped by the user (its
 .xsq is regenerated but it is not rendered); `Deck-the-Halls-layout` is the older file and is skipped. All use the default colour
 story; the user reviewed This Christmas in the editor ("working quite well") but not the other videos.
+2026-11-03: `2015-Hits-Santa-Style` rebuilt through song_to_package (local mp3, `--source-url` its video): intro silence
+cut, ends 4:33 before the "This Christmas" tag, lyrics typed from the description (see song-to-package skill), "stand leg"
+(user's pick for an unclear word). Other Hits-Santa-Style songs likely still have uncorrected Whisper lyrics (check their logs).
 Non-Eclipse song added: `Eclipse6-Raining-Tacos-Again` (Parry Gripp, YouTube e6Q7s8Zr93Q). It has a video on the Matrix:
 `enhance_layout.py ... --artist "Parry Gripp" --video "Videos/Eclipse6-Raining-Tacos-Again.mp4" --video-model Matrix --video-crop 6`
 (Matrix is 120x60 = 2:1, a 16:9 video is cropped 6% top and bottom; the video file lives in `F:\ShowFolderAI\Videos`; pass the
