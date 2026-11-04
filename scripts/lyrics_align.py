@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 
 import requests
+from transcribe_words import spell_numbers
 
 HERE = Path(__file__).resolve().parent
 
@@ -62,6 +63,7 @@ def tokens(text: str) -> list[str]:
     """Upper-case words as the aligner sees them (apostrophes kept, everything else a space)."""
     text = re.sub(r"\[.*?\]|\(.*?\)", " ", text)
     text = text.replace("&", " and ").replace("’", "'").replace("‘", "'")
+    text = spell_numbers(text)  # lrclib writes "500 Miles"; the aligner has no digits
     text = re.sub(r"[^A-Za-z0-9' ]+", " ", text)
     return [w.strip("'").upper() for w in text.split() if w.strip("'")]
 

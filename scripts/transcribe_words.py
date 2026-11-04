@@ -36,6 +36,63 @@ from pathlib import Path
 QUIET_REL = 0.05    # phrase dropped when the vocal track's median loudness under it is below this x its 90th pct
                     # (silence measures < 0.05; 0.15 dropped quiet spoken lines of Mean Grinch at 0.08-0.13)
 
+_ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+         "seventeen eighteen nineteen").split()
+_TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def number_words(n: int) -> list[str]:
+    """Spoken words for 0..999999: 500 -> five hundred, 1985 -> nineteen eighty five (years are sung that way)."""
+    if n < 20:
+        return [_ONES[n]]
+    if n < 100:
+        return [_TENS[n // 10]] + ([_ONES[n % 10]] if n % 10 else [])
+    if 1100 <= n <= 2099 and n % 100 and not 2000 <= n <= 2009:   # a year: nineteen eighty five, twenty twenty one
+        return number_words(n // 100) + (["oh"] if n % 100 < 10 else []) + number_words(n % 100)
+    if n < 1000:
+        return [_ONES[n // 100], "hundred"] + (number_words(n % 100) if n % 100 else [])
+    return number_words(n // 1000) + ["thousand"] + (number_words(n % 1000) if n % 1000 else [])
+
+
+def spell_numbers(text: str) -> str:
+    """Digits as sung words ('500 toys' -> 'five hundred toys', '80s' -> 'eighties'): the aligner and CMUdict
+    have no digits, so a '500' got a 50 ms word with no mouth shapes (80s Hits Santa Style)."""
+    def one(m):
+        n = int(m.group(1).replace(",", ""))
+        words = number_words(n) if n < 1_000_000 else list(m.group(1))
+        if m.group(2):  # 80s / 1980's -> eighties
+            last = words[-1]
+            words[-1] = last[:-1] + "ies" if last.endswith("y") else last + "s"
+        return " ".join(words)
+    return re.sub(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+)('?s)?(?![\w.])", one, text)
+
+
+def spell_word_numbers(phrases: list[dict]) -> list[dict]:
+    """spell_numbers on every word; a number word becomes several words sharing its time. Whisper squeezes a
+    number into a sliver (500 at 24.50-24.55 s, sung over 23.24-24.75), so it first takes the silent gap
+    around it, up to 0.6 s per spoken word."""
+    for p in phrases:
+        out = []
+        ws = p["words"]
+        for i, w in enumerate(ws):
+            spoken = spell_numbers(w["w"]).split()
+            if len(spoken) == 1 and spoken[0] == w["w"]:
+                out.append(w)
+                continue
+            lo = out[-1]["e"] if out else max(p["start"], w["s"] - 1.0)
+            hi = ws[i + 1]["s"] if i + 1 < len(ws) else min(p["end"], w["e"] + 1.0)
+            want = 0.6 * len(spoken)
+            s, e = w["s"], w["e"]
+            if e - s < want:  # grow into the gap, mostly backwards (the number is usually sung before Whisper's stamp)
+                s = max(lo, e - want)
+                e = min(hi, max(e, s + want))
+            step = (e - s) / len(spoken)
+            out += [{"w": t, "s": s + k * step, "e": s + (k + 1) * step, "p": w.get("p", 0.5)}
+                    for k, t in enumerate(spoken)]
+        p["words"] = out
+        p["text"] = spell_numbers(p["text"])
+    return phrases
+
 
 def to_wav16k(audio: Path, wav: Path) -> None:
     subprocess.run(
@@ -160,6 +217,7 @@ def main() -> None:
                 to_wav16k(Path(args.audio), wav)
             phrases = transcribe(wav, args.model)
 
+    phrases = spell_word_numbers(phrases)
     Path(args.out).write_text(json.dumps(phrases, indent=1), encoding="utf-8")
     print(len(phrases), "phrases", sum(len(p["words"]) for p in phrases), "words")
 
