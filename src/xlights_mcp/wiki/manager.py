@@ -14,6 +14,7 @@ the Markdown so they can be referenced with relative paths
 
 from __future__ import annotations
 
+import os
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -128,12 +129,21 @@ class WikiManager:
     # ------------------------------------------------------------------
 
     def _git(self, *args: str) -> str:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=self.root,
-            capture_output=True,
-            text=True,
-        )
+        # stdin=DEVNULL: an MCP stdio server's stdin is the protocol pipe; a git
+        # child inheriting it can block forever on Windows.  No credential or
+        # editor prompts either, and a hard timeout so a tool call can't hang.
+        try:
+            result = subprocess.run(
+                ["git", *args],
+                cwd=self.root,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true"},
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise WikiError(f"git {' '.join(args)} timed out after {exc.timeout}s") from exc
         if result.returncode != 0:
             raise WikiError(f"git {' '.join(args)} failed:\n{result.stderr.strip()}")
         return result.stdout.strip()
