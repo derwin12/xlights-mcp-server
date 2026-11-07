@@ -56,6 +56,8 @@ KEEP_WIKI_BODY = {
 # as they are (they are checked against xLights' effectmetadata JSON).
 EFFECTS_PREFIX = "effects/off/"
 SIDEBAR_DEPTH = 2  # chapter + its direct sub-pages; deeper pages via "In This Section"
+# Sidebar labels that differ from the manual's titles (pages rewritten in the wiki)
+SIDEBAR_TITLES = {"Controllers-Tab": "Controllers", "Controllers-Settings": "Controller Settings"}  # a Layout sub-page since xLights 2026.14
 
 # Pages whose content is folded into their parent page instead of getting a
 # page of their own (the parent README is only a banner image).
@@ -329,7 +331,8 @@ def build_sidebar(pages: list[Page], old: str) -> str:
         if p.group != group:
             group = p.group
             lines += ["", f"## {group}"]
-        lines.append("  " * p.depth + f"- [[{p.title}|{p.wiki_name}]]")
+        title = SIDEBAR_TITLES.get(p.wiki_name, p.title)
+        lines.append("  " * p.depth + f"- [[{title}|{p.wiki_name}]]")
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip() + "\n\n" + footer + "\n"
 
 
@@ -372,9 +375,11 @@ def main() -> int:
     # hand-written wiki pages only: pages from an earlier run of this script
     # (they carry a manual-source comment) must keep their names on re-runs
     all_wiki = {p.stem for p in wiki.glob("*.md")}
-    existing = {p.stem for p in wiki.glob("*.md")
-                if "<!-- manual-source:" not in p.read_text(encoding="utf-8")
-                or "(wiki text kept" in p.read_text(encoding="utf-8")}
+    # (pages rewritten in the wiki keep their manual page's name too)
+    def ours(text: str) -> bool:
+        return ("<!-- manual-source:" in text and "(wiki text kept" not in text) or "<!-- maintained-in-wiki" in text
+
+    existing = {p.stem for p in wiki.glob("*.md") if not ours(p.read_text(encoding="utf-8"))}
     assign_names(pages, existing, all_wiki)
 
     conv = Converter(manual, wiki, pages, args.section, commit)
@@ -393,6 +398,9 @@ def main() -> int:
             print(f"{'nav+':6} {out.name:45} <- {page.path}")
             if not args.dry_run:
                 out.write_text(text, encoding="utf-8", newline="\n")
+            continue
+        if out.exists() and "<!-- maintained-in-wiki" in out.read_text(encoding="utf-8"):
+            print(f"{'skip':6} {out.name:45} <- {page.path} (maintained in the wiki)")
             continue
         text = conv.render(page)
         see_also = keep_see_also(out)
