@@ -390,6 +390,9 @@ def main() -> int:
 
     for page in todo:
         out = wiki / f"{page.wiki_name}.md"
+        if out.exists() and "<!-- maintained-in-wiki" in out.read_text(encoding="utf-8"):
+            print(f"{'skip':6} {out.name:45} <- {page.path} (maintained in the wiki)")
+            continue
         if page.keep_wiki:
             text = conv.render_kept(page, out.read_text(encoding="utf-8"))
             if text is None:
@@ -398,9 +401,6 @@ def main() -> int:
             print(f"{'nav+':6} {out.name:45} <- {page.path}")
             if not args.dry_run:
                 out.write_text(text, encoding="utf-8", newline="\n")
-            continue
-        if out.exists() and "<!-- maintained-in-wiki" in out.read_text(encoding="utf-8"):
-            print(f"{'skip':6} {out.name:45} <- {page.path} (maintained in the wiki)")
             continue
         text = conv.render(page)
         see_also = keep_see_also(out)
