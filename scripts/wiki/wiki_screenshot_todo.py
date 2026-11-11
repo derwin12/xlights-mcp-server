@@ -27,7 +27,8 @@ from wiki_screenshot_ages import OLD, first_added, gh, slug  # noqa: E402
 WIKI_URL = "https://github.com/xLightsSequencer/xLights/wiki/"
 CHAPTER_ISSUES = range(1, 10)
 PAGE_IN_ISSUE = re.compile(r"\]\(https://github\.com/[^/]+/[^/]+/wiki/([^)#]+)\)")
-ITEM_KEY = re.compile(r"^- \[[ x]\] (`[^`]+`|placeholder: [^—\n]+?)(?: —|$)")
+# Key = the image path, or the placeholder text up to any appended note (" *keep*", " *needs setup:* ...").
+ITEM_KEY = re.compile(r"^- \[[ x]\] (`[^`]+`|placeholder: .+?)(?: —| \*|$)")
 
 
 def chapters(repo: str) -> list[tuple[str, list[str]]]:
