@@ -66,6 +66,8 @@ const int COLS = {g.COLS};
 const int NE = {g.N_ENEMIES};
 const int KILL_ORDER[{g.N_ENEMIES}] = int[]({_ints(g.KILL_ORDER)});
 const int SWAY[{len(g.SWAY)}] = int[]({_ints(g.SWAY)});
+const int DIVE_DX[{g.DIVE_LEN_Q}] = int[]({_ints(g.DIVE_DX)});
+const int DIVE_DY[{g.DIVE_LEN_Q}] = int[]({_ints(g.DIVE_DY)});
 const int ENEMY[{len(enemies)}] = int[]({_ints(enemies)});
 const int SPARK[{len(sparks)}] = int[]({_ints(sparks)});
 const int PLAYER[{len(g.PLAYER) * len(g.PLAYER[0])}] = int[]({_ints(_codes(g.PLAYER))});
@@ -107,6 +109,31 @@ ivec2 enemyPos(int e, int beat, bool entering, float beatInBar, int dip) {{
     return ivec2(x, y);
 }}
 
+int diverOf() {{
+    if (entry || (int(songBeat + 0.5) / 4) % 2 == 0) return -1;
+    int left = 0;
+    for (int e = 0; e < NE; e++) if (bitOf(alive, e)) left++;
+    if (left < 3) return -1;
+    for (int t = NE - 1; t >= 0; t--) {{
+        int e = KILL_ORDER[t];
+        if (!bitOf(alive, e)) continue;
+        bool killed = false;
+        for (int k = 0; k < NE; k++) {{
+            if (k >= nKills) break;
+            if (killEnemy[k] == e) killed = true;
+        }}
+        if (!killed) return e;
+    }}
+    return -1;
+}}
+
+ivec2 diveOffset(int e, int q) {{
+    int i = q - {g.DIVE_START_Q};
+    if (i < 0 || i >= {g.DIVE_LEN_Q}) return ivec2(0);
+    int sgn = e % COLS < COLS / 2 ? 1 : -1;
+    return ivec2(DIVE_DX[i] * sgn, DIVE_DY[i]);
+}}
+
 int playerX(int slot, int beat) {{
     int target = -1;
     for (int k = 0; k < NE; k++) {{
@@ -131,6 +158,7 @@ vec4 game(ivec2 p, float beatInBar, int dip) {{
     int slot = q / 4, sub = q % 4;
     int beat = int(songBeat + 0.5) + int(floor(beatInBar));
     int kind = int(wave + 0.5) % 3;
+    int dv = diverOf();
 
     ivec2 pp = ivec2(playerX(slot, beat), {g.PLAYER_Y});
     if (inSprite(p, pp, {len(g.PLAYER[0])}, {len(g.PLAYER)})) {{
@@ -183,6 +211,7 @@ vec4 game(ivec2 p, float beatInBar, int dip) {{
         }}
         if (gone) continue;
         ivec2 ep = enemyPos(e, beat, entry, beatInBar, dip);
+        if (e == dv) ep += diveOffset(e, q);
         if (inSprite(p, ep, 5, 5)) {{
             int c = ENEMY[(kind * 2 + beat % 2) * 25 + (p.y - ep.y) * 5 + p.x - ep.x];
             int row = (e / COLS + int(wave + 0.5)) % 3;

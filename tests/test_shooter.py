@@ -106,3 +106,20 @@ def test_game_starts_fresh_where_it_is_first_shown(tmp_path):
     model = next(e for e in root.iter("Element") if e.get("name") == "Matrix")
     text = root.find("EffectDB")[int(model.findall("EffectLayer")[0][0].get("ref"))].text
     assert f"alive={g.ALL_ALIVE * 100}," in text and "E_CHECKBOX_SHADERXYZZY_entry=1" in text   # a fresh wave
+
+
+def test_a_diver_swoops_on_odd_bars_and_is_never_the_target():
+    every_beat = K(0, 4, 8, 12)
+    st = g.BarState(every_beat, g.ALL_ALIVE, 0, False, 4)          # second bar (song beat 4), no fly-in
+    kl = g.kills(st.kick, st.alive, st.entry)
+    dv = g.diver(st, kl)
+    assert dv == g.KILL_ORDER[-1] and dv not in {e for _, e in kl}
+    assert g.diver(g.BarState(every_beat, g.ALL_ALIVE, 0, False, 0), kl) == -1      # even bar: no dive
+    assert g.diver(g.BarState(every_beat, g.ALL_ALIVE, 0, True, 4), kl) == -1       # flying in: no dive
+    assert g.dive_offset(dv, g.DIVE_START_Q - 1) == (0, 0)
+    assert g.dive_offset(dv, g.DIVE_START_Q + g.DIVE_LEN_Q // 2)[1] == max(g.DIVE_DY)
+    cols = [(220, 30, 40), (30, 200, 80), (40, 120, 255)]
+    x, y = g.enemy_pos(dv, 4 + 2, False, 1.0, 0)                 # song beat 6: the deepest point is on beat 3
+    deepest = g.render(st, (g.DIVE_START_Q + g.DIVE_LEN_Q // 2 + 0.5) / 16, cols)
+    dx, dy = g.dive_offset(dv, g.DIVE_START_Q + g.DIVE_LEN_Q // 2)
+    assert deepest.getpixel((x + 2 + dx, y + dy)) == g.GOLD                         # its cap, 9 rows down

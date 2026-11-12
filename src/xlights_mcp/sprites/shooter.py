@@ -4,7 +4,8 @@ A sleigh cannon at the bottom of a 40x20 playfield shoots at a formation of 12
 ornaments that sways one step per beat. Every kick knocks one out with a sparkle
 burst; on beats without a kill a shot flies off the top. When a wave is cleared
 the next one (baubles, snowflakes, presents in turn) flies in at the next bar.
-Snow falls behind it all, and the formation dips on loud beats.
+Snow falls behind it all, and the formation dips on loud beats. Every other bar one
+ornament peels out on beat 2 and swoops down at the sleigh, back in its slot by beat 4.
 
 A shader has no memory, so the game is played out bar by bar in Python
 (simulate) and each bar's effect is told its starting state: which enemies are
@@ -17,6 +18,7 @@ the same rules here and in the generated shader. Times are quantized to quarter
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from PIL import Image
@@ -32,6 +34,9 @@ PLAYER_Y = 16
 GUN_Y = 15                           # bullets start here
 SWAY = [0, 1, 2, 1, 0, -1, -2, -1]   # formation x offset by beat
 SNOW_FLAKES = 14
+DIVE_START_Q, DIVE_LEN_Q = 16, 32     # a diver leaves on beat 2 and is back in its slot by beat 4
+DIVE_DX = [round(6 * math.sin(2 * math.pi * i / DIVE_LEN_Q)) for i in range(DIVE_LEN_Q)]
+DIVE_DY = [round(9 * math.sin(math.pi * i / DIVE_LEN_Q)) for i in range(DIVE_LEN_Q)]
 
 BLACK = (0, 0, 0)
 GOLD = (255, 200, 40)
@@ -99,6 +104,24 @@ def simulate(kick_masks: list[int], beats_per_bar: list[int]) -> list[BarState]:
     return out
 
 
+def diver(st: BarState, kl: list[tuple[int, int]]) -> int:
+    """The enemy that swoops this bar, or -1: on every other bar (not while a wave flies in), the one that will be
+    shot last, so nothing aims at it mid-dive; only while at least 3 are left."""
+    if st.entry or (st.song_beat // 4) % 2 == 0 or bin(st.alive).count("1") < 3:
+        return -1
+    killed = {e for _, e in kl}
+    return next((e for e in reversed(KILL_ORDER) if st.alive >> e & 1 and e not in killed), -1)
+
+
+def dive_offset(e: int, q_in_bar: int) -> tuple[int, int]:
+    """Swoop offset at this quarter-16th of the bar (0, 0 outside the dive). Left-half divers curve right."""
+    i = q_in_bar - DIVE_START_Q
+    if not 0 <= i < DIVE_LEN_Q:
+        return 0, 0
+    sign = 1 if e % COLS < COLS // 2 else -1
+    return DIVE_DX[i] * sign, DIVE_DY[i]
+
+
 def enemy_pos(e: int, beat: int, entry: bool, beat_in_bar: float, dip: int) -> tuple[int, int]:
     r, c = divmod(e, COLS)
     x = 2 + c * 6 + SWAY[beat % len(SWAY)]
@@ -142,11 +165,11 @@ def render(st: BarState, beat_in_bar: float, colours: list[tuple[int, int, int]]
     sub = q_in_bar % 4
     beat = st.song_beat + int(beat_in_bar)
     f = beat_in_bar - int(beat_in_bar)
-    import math
     dip = min(1, int(math.floor(loud * 1.5 * math.sin(3.14159 * f) + 0.5)))
     kind = WAVE_KINDS[st.wave % 3]
     kl = kills(st.kick, st.alive, st.entry)
     killed_at = {e: s for s, e in kl}
+    dv = diver(st, kl)
 
     q_song = st.song_beat * 16 + q_in_bar
     for fl in range(SNOW_FLAKES):
@@ -156,6 +179,9 @@ def render(st: BarState, beat_in_bar: float, colours: list[tuple[int, int, int]]
         if not st.alive >> e & 1 or (e in killed_at and slot >= killed_at[e]):
             continue
         x, y = enemy_pos(e, beat, st.entry, beat_in_bar, dip)
+        if e == dv:
+            dx, dy = dive_offset(e, q_in_bar)
+            x, y = x + dx, y + dy
         col = colours[(e // COLS + st.wave) % len(colours)]
         for yy, row in enumerate(ENEMY[kind][beat % 2]):
             for xx, ch in enumerate(row):

@@ -15,8 +15,11 @@ Built 2026-11-11, inspired by the skeleton/LED-panel scenes in a Game Changers A
 | Band shader generator (`Shaders/Skeleton Band.fs`) and placement | `band_shader.py`, `band_place.py` |
 | Sky Shooter (Christmas formation shooter): game rules, simulation, renderer | `src/xlights_mcp/sprites/shooter.py` |
 | Sky Shooter shader generator (`Shaders/Sky Shooter.fs`) and placement | `shooter_shader.py`, `shooter_place.py` |
+| Maze Chase (Christmas maze game): maze, runner tour, renderer | `src/xlights_mcp/sprites/maze.py` |
+| Maze Chase shader generator (`Shaders/Maze Chase.fs`) and placement | `maze_shader.py`, `maze_place.py` |
+| Shared placement for the game shaders | `src/xlights_mcp/sprites/game_place.py` |
 | Drum hits from audio (shared with enhance_layout `--mh-hits`) | `src/xlights_mcp/audio/drums.py` |
-| CLIs | `scripts/dance_crew.py`, `scripts/skeleton_band.py`, `scripts/sky_shooter.py` |
+| CLIs | `scripts/dance_crew.py`, `scripts/skeleton_band.py`, `scripts/sky_shooter.py`, `scripts/maze_chase.py` |
 
 The Python sprites are the source of truth. The shaders are generated from them and must
 match them pixel for pixel (with smoothing and bounce off). That was checked with a
@@ -69,9 +72,10 @@ plays the game out over the song and passes each bar's starting state (alive mas
    snare hits); bars longer than 4 beats lose slots past 16; the order is fixed (guitar,
    singer, drums); drum hits from audio take ~20 s per song (librosa) on every run.
 9. **Remaining video ideas**: Beat Runner side-scroller (runner jumps on beats, coins on drum
-   hits), an original maze chase (own characters and maze, not a Pac-Man copy), parade/chase
-   across the matrix, sound bars around a centre picture, beat-timed greeting text. Sky Shooter
-   could add divers on drops and a Halloween theme.
+   hits), parade/chase across the matrix, sound bars around a centre picture, beat-timed greeting
+   text. Sky Shooter has divers on every other bar; a Halloween theme for the games is still open.
+   Games are original designs in arcade genres: no copies of Pac-Man, Galaga or Mario characters,
+   sprites or levels.
 10. **MCP tools**: the dancers and band are scripts only; expose them as MCP tools if they
     should be usable from chat.
 11. **Clean-up in the show folder**: decide whether to keep the two preview copies and the
