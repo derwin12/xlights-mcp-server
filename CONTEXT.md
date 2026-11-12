@@ -1,15 +1,20 @@
 # Session Context
 
 ## Current Task
-Implementing the remaining gaps from the xLights MCP Server Project Plan: sequence editing tools are done; now investigating how to implement `render_frame` and validated effect editing.
+Manual → wiki migration (skill `manual-to-wiki`). As of 2026-11-11, chapters #4, #6, #7 and #8 are done and live on the official wiki (last push 1f1f5ce). Remaining work is listed on derwin12/manual #10.
 
 ## Key Decisions
-- Added `add_effect`/`update_effect`/`delete_effect` MCP tools (src/xlights_mcp/server.py) backed by `src/xlights_mcp/xlights/xsq_editor.py` — edits the `.xsq` XML directly, in place, with a timestamped `.bak` backup per write. Tested in `tests/test_xsq_editor.py` (all passing, full suite 125 passed).
-- Discovered xLights has a **live HTTP automation API** (the same one `xlDo` uses) on the running app, port 49913+ for instance "A". Source: `H:\XlightsSourceDir\xLights\src-ui-wx\automation\xLightsAutomations.cpp`. It already implements `openSequence`, `addEffect`, `setEffectSettings`/`getEffectSettings` (schema-validated, stable effect IDs via `GetID()`), `getEffectIDs`, `renderAll`, `exportVideoPreview` (renders an actual video/frame), `saveSequence`, `getModels`/`getModel`, `getSequenceInfo`, `checkSequence`.
-- This means `render_frame`/`render_clip` and *validated* effect editing don't require building a renderer from scratch — they can be implemented as a thin client that POSTs JSON commands to a running xLights instance's automation port, exactly like `xlDo` does (see `H:\XlightsSourceDir\xLights\xlDo\xlDo.cpp` and `automation.cpp`).
-- Not yet decided: whether to (a) keep the offline `.xsq` XML editor as-is and add a *separate* set of "live" tools that talk to a running xLights instance, or (b) replace the offline editor with live-API calls. Leaning toward (a) — offline editing works without xLights running; live tools unlock rendering/validation when it is.
+- Shots that need edits are taken in the throwaway F:\ShowFolderWiki; you switch to it through File › Recent Show Folders, which is a permanent switch. Effects are added through `automation_client.add_effect`, and the sequence is closed with `close_sequence(force=True)`. Nothing is ever saved.
+- Push to staging first. Push to the official wiki only on the user's go-ahead, which was given for every push this session.
+- Avoid copyrighted lyrics in images: crop the lyric rows and use public-domain songs (Jingle Bells).
 
 ## Next Steps
-- Decide schema for live-API tools (e.g. `xlights_connect`, `render_frame`, `add_effect_live`) and how the MCP server discovers/talks to a running xLights instance (default port, IP, multi-instance A/B).
-- Read `ExportVideoPreview` implementation to confirm whether it supports a time range (for single-frame vs clip export) before building `render_frame`.
-- Revisit `add_effect`/`update_effect`/`delete_effect` to optionally route through the live API (`addEffect`/`setEffectSettings`/`getEffectIDs`) for real-time validation against actual xLights effect schemas, falling back to the offline XML editor when xLights isn't running.
+- #5 Layout (15 of 32 pages left): add Candy Cane, Channel Block, Circle, PolyLine, Label, Spinner and non-MH DMX models to ShowFolderWiki, then take the 29 needs-setup shots.
+- #19: refresh the 39 pre-2022 Sequencer images (Layer Blending 15, Changing An Effect 7, Layer Settings 5). Run `scripts/wiki/wiki_screenshot_todo.py --issue 19` afterwards.
+- Loose ends:
+  - Pixel Editor won't paint: try it by hand.
+  - LOR Enhanced Speed mismatch: 25000 vs 1000000.
+  - Possible xLights bugs, posted on #6: getEffectSettings JSON escaping; addEffect allows overlapping effects; the MIDI chooser's title is wrong.
+
+## Also in flight (details in memory + skills)
+- Christmas Techno Mix (F:\ShowFolderQA) and Eclipse6 (F:\ShowFolderAI) are still waiting on the user.
