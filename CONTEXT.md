@@ -17,4 +17,5 @@ Manual → wiki migration (skill `manual-to-wiki`). As of 2026-11-11, chapters #
   - Possible xLights bugs, posted on #6: getEffectSettings JSON escaping; addEffect allows overlapping effects; the MIDI chooser's title is wrong.
 
 ## Also in flight (details in memory + skills)
+- Dance Crew and Skeleton Band shaders for the matrices: built and in Crazy / Fast Car; open items in `specs/sprite-shaders.md`.
 - Christmas Techno Mix (F:\ShowFolderQA) and Eclipse6 (F:\ShowFolderAI) are still waiting on the user.
