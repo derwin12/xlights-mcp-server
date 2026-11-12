@@ -91,11 +91,32 @@ Result: 4 lyric tracks (Tree Male/Female, Red/Green bulb, voices split by pitch)
   grouped calm/drive/peak by measured motion; dark or flat ones dropped after a Mega Tree test render); `--look-video <mp4>`
   turns the video's main hues into the colour story (song_to_package passes it automatically). `--classic-look` = the old
   fixed look. Regenerating an older song from its .bak now changes its shaders too.
+- **Options added 2026-11-06 (Lose Yourself):** `--half-time` (tempo detected double, e.g. 172 for an 86 BPM rap: keeps
+  every other downbeat, parity with the stronger kick); `--sections sections.json` (`[[start_s, end_s, "intro|verse|chorus|outro", energy], ...]`,
+  when detection misplaces the chorus; set from Whisper word times); `--drops auto|22.5,67.3` (bass drops: whole-house
+  Per Preview Shockwave + echo ring on a new top layer of every prop row, and a heads strobe-up-then-explode bar;
+  auto = bass 30-150 Hz jumping 1.3x bar-over-bar); `--more-moves` (new MH patterns cascade/seesaw, burst/stutter,
+  weighted 3x, plus Meteors rain on the Icicles in choruses; off by default so older songs keep their seeded picks).
+  `--mh-hits` (heavy-beat songs; user: heads "don't really match the heavy beats"): from the first drop on, verse and chorus
+  bars flash the heads on detected drum accents (percussive onsets, low end weighted): the bar's heaviest hits fire all
+  heads wide/narrow, lighter ones alternate odd/even heads. Drop shockwave: white->yellow, radius 170 over 1.6 s (radius 300
+  crossed the house in 0.5 s and read faint) - and that still read as a faint tint (user: "i didnt see any"), so now per
+  drop: a 150 ms white On flash, then ONE solid white hard-edged ring (Blend Edges off, radius 140, width 25->45, 2.5 s).
+  Never put two effects that overlap in time on one layer (the old echo ring overlapped the main ring by 200 ms). Section boundaries must sit a little BEFORE the grid bar (a bar 8 ms early
+  stayed in the previous section's colours).
+  Matrix 2 is 40x30 (4:3): a 16:9 video takes `--video-model "Matrix 2" --video-crop-x 12`.
 - Default colour story = the pilot's (amber verses, red/gold and green choruses, white/gold peak, red/white outro).
   Per song, pass `--palettes story.json`, e.g. `{"chorusA": {"trees": ["#2060FF", "#A0D0FF"]}, "sparkle": {"chorusA": "#FFD700"}}`
   (roles: outline, trees, arches, stars, topper, icicles, flood, megatree - 3 colours; sparkle keys are the section names
   verse, chorusA, chorusB, peak, outro).
 - Do not run it on `Eclipse6-Deck-the-Halls-layout.xsq` (older, has its own outline/VU).
+
+## 4b. Lyric pictures (do not skip; user 2026-11-06: "we didnt include any images tied to the lyrics")
+`python scripts/lyric_images.py <xsq> <words.json> --show F:\ShowFolderAI [--icons <song>.lyric_icons.json] [--hold 1.4] [--models "Mega Tree" Matrix]`
+Same step as song_to_package's (see that skill: Noto emoji, top layer, transparent black). Ask the user which sung words get
+pictures; a song's own list (`<Name>.lyric_icons.json`, word -> emoji) can replace the shared one. Leave the video matrix out
+of `--models`. Words inside another picture's hold are skipped: shorten `--hold` if a wanted word is missing. It edits the
+xsq in place (replaces only its own layers), so it is safe after the user's own edits; enhance_layout from the .bak is not.
 
 ## 5. Render the house preview video
 1. xLights must be running, idle, with the ShowFolderAI folder open and the house preview selected.
@@ -141,6 +162,13 @@ Non-Eclipse song added: `Eclipse6-Raining-Tacos-Again` (Parry Gripp, YouTube e6Q
 `enhance_layout.py ... --artist "Parry Gripp" --video "Videos/Eclipse6-Raining-Tacos-Again.mp4" --video-model Matrix --video-crop 6`
 (Matrix is 120x60 = 2:1, a 16:9 video is cropped 6% top and bottom; the video file lives in `F:\ShowFolderAI\Videos`; pass the
 same flags when regenerating from the `.bak`, and that matrix then gets no Mega Tree effects). Whisper heard a few words wrong.
+2026-11-06: `Eminem-Lose-Yourself` (not an Eclipse 6 song, so named <Artist>-<Song> per user; Fortnite edit, YouTube Uo6dNtklvsE, 111 s), bold primary story (blue verses,
+red/yellow and magenta/green choruses, purple/orange outro). Regenerate from the .bak with
+`--palettes Eminem-Lose-Yourself.story.json --sections Eminem-Lose-Yourself.sections.json --half-time --drops auto --more-moves --mh-hits --artist Eminem --video Videos/Eminem-Lose-Yourself.mp4 --video-model "Matrix 2" --video-crop-x 12`
+drops 22.5/33.7/67.3. Lyrics: Whisper words corrected against lrclib (Genius blocks fetching) and saved as
+`Eminem-Lose-Yourself.words.json`; rebuild the base with song_to_singing_props --words that file.
+Pictures: `--icons Eminem-Lose-Yourself.lyric_icons.json --models "Mega Tree" Matrix --hold 1.1` (shot, sweater, spaghetti; user's pick).
+The user edited this xsq after generation: patch it in place, do NOT regenerate it from the .bak.
 Videos: `F:\ShowFolderAI\HousePreviewVideos\`. Plan doc: Claude doc "Eclipse6 Sequence Enhancement Plan".
 Candidate next songs the user is considering: a "top 10 Christmas" list (Jingle Bell Rock, Rockin' Around the Christmas Tree, Last
 Christmas, It's Beginning to Look a Lot Like Christmas, Carol of the Bells, Let It Snow, Santa Claus Is Comin' to Town, Rudolph,

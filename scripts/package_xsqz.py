@@ -2,7 +2,8 @@ r"""Package a generated MH sequence as an xLights .xsqz (zip) for sharing.
 
 usage: python scripts/package_xsqz.py "EL_Halloween Is Here v1" [--show F:\ShowFolderAI] [--no-media]
 Contents: xlights_rgbeffects.xml, xlights_networks.xml, the .xsq (bare mediaFile name), the media file
-(left out with --no-media) and any show-relative pictures the Pictures effects use (e.g. Images/LyricIcons/*).
+(left out with --no-media), any show-relative pictures the Pictures effects use (e.g. Images/LyricIcons/*) and the
+Shader effects' .fs files at their show-relative path (Shaders/*).
 Written to <show>\packages\<name>.xsqz. Use the generated .xsq, not one xLights re-saved.
 """
 import argparse
@@ -42,6 +43,18 @@ def main():
             for rel in sorted(set(re.findall(r"E_FILEPICKERCTRL_Video_Filename=([^,<]+)", text))):
                 if not Path(rel).is_absolute() and (show / rel).exists():
                     z.write(show / rel, rel)
+        # shaders are stored with an absolute path (F:/ShowFolderAI/Shaders/X.fs): pack them at the show-relative path,
+        # where xLights' FixFile finds them on another machine (the same layout xLights' own Package Sequence uses)
+        for p in sorted(set(re.findall(r"E_0FILEPICKERCTRL_IFS=([^,<]+)", text))):
+            f = Path(p) if Path(p).is_absolute() else show / p
+            try:
+                rel = f.resolve().relative_to(show.resolve()).as_posix()
+            except ValueError:
+                rel = f"Shaders/{f.name}"   # outside the show folder: put it where the show's own shaders live
+            if f.exists():
+                z.write(f, rel)
+            else:
+                print(f"warning: shader file missing, not packed: {p}")
     print(f"wrote {out} ({out.stat().st_size} bytes)")
 
 

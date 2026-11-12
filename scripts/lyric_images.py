@@ -89,7 +89,7 @@ def model_png(emoji: str, show: Path, size: tuple[int, int]) -> str | None:
 
 
 def stems(word: str) -> list[str]:
-    w = word.lower().strip("'")
+    w = word.lower().strip(".,!?;:\"").strip("'")  # Whisper words keep their punctuation ("shot,")
     out = [w]
     if w.endswith("in"):
         out.append(w + "g")
@@ -109,7 +109,7 @@ def find_hits(phrases: list[dict], icons: dict[str, str]) -> list[tuple[float, s
         for n in (3, 2, 1):         # longest phrase first: "crystal ball" before "ball"
             if i + n > len(words):
                 continue
-            text = " ".join(w["w"].lower().strip("'") for w in words[i:i + n])
+            text = " ".join(w["w"].lower().strip(".,!?;:\"").strip("'") for w in words[i:i + n])
             cands = [text] if n > 1 else stems(text)
             key = next((c for c in cands if c in keys), None)
             if key:

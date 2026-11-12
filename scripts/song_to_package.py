@@ -184,6 +184,7 @@ def main() -> None:
     ap.add_argument("--dancer", action="store_true", help="pixel dancer doing the Cupid Shuffle calls (to the right / "
                     "left / kick / walk it by yourself) on the Mega Tree and Matrix (shuffle_dancer.py)")
     ap.add_argument("--classic-look", action="store_true", help="old fixed colours/shaders (songs built before 2026-10-26)")
+    ap.add_argument("--palettes", help="colour story JSON for enhance_layout.py (roles per section, see eclipse-song-pipeline skill)")
     ap.add_argument("--video-model", help='matrix that plays the YouTube video (e.g. "Matrix 2") instead of shaders and '
                                           "pictures; the video goes to <show>/Videos/<name>.mp4")
     ap.add_argument("--video-crop", type=int, default=0, help="percent cropped from the video's top and bottom (2:1 Matrix: 6)")
@@ -261,6 +262,8 @@ def main() -> None:
                 cmd += ["--classic-look"]
             elif not local:   # the song's own video sets the colour story
                 cmd += ["--look-video", str(fetch_video.fetch(a.url, audio=True))]
+            if a.palettes:   # hand-picked colour story; overrides the roles it names
+                cmd += ["--palettes", a.palettes]
             if a.video_model:
                 cmd += ["--video", f"Videos/{clip.name}", "--video-model", a.video_model,
                         "--video-crop", str(a.video_crop), "--video-crop-x", str(a.video_crop_x)]

@@ -35,6 +35,8 @@ aligner still gets wrong: edit fixed.json directly (keep each word's s/e, spread
 pass (`ffmpeg -ss <start> -t <len> ... -c:a libmp3lame -b:a 128k -ar <source rate>`, back up the original first), then
 `--redo words` (timings are re-measured). To only cut the end, drop the phrases past the cut from fixed.json and `--redo xsq`.
 Cut where the audio decays to digital silence, not mid-note.
+**Scat gaps get wrong lyrics** (Daniela-Andrade-Crazy): `fill_gaps` put the unsung "My heroes..." verse over soft "ba ba ba bey" scat (the stem shows singing, so it fills). Check every "missed lines filled" entry by ear; scat repeats show as 4 onsets ~0.29 s apart every ~2.45 s.
+**Own colour story** (`--palettes <show>/<name>.story.json`, passed to enhance_layout; overrides the video hues, which can come out muted - Daniela-Andrade-Crazy 2026-11-10: user found the video colours "very muted orange and dark blues").
 **Docker Desktop must be running** (karaokeer): `transcribe_words --separate` fails at `docker start karaokeer` otherwise.
 
 ## Pipeline

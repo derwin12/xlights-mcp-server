@@ -193,6 +193,8 @@ class Seq:
                 cols = ("#" + "".join(f"{int(int(c[k:k + 2], 16) * 0.3):02X}" for k in (0, 2, 4)),)
             elif role == "video":
                 cols = ("#FFFFFF",)
+            elif role == "dropwhite":  # whole-house flash + shockwave on a bass drop
+                cols = ("#FFFFFF",)
             elif role == "treetint":
                 cols = (PALETTES[key]["trees"][0],)
             elif role.startswith("tint"):
@@ -200,7 +202,7 @@ class Seq:
             else:
                 cols = PALETTES[key][role]
             # no sparkles on the floods; the tint layer is Average-blended over the shader, so they go on the shader layer
-            sparkle = role not in ("treetint", "flood", "text", "lyric", "lyricbg", "video")
+            sparkle = role not in ("treetint", "flood", "text", "lyric", "lyricbg", "video", "dropwhite")
             ET.SubElement(self.pals, "ColorPalette").text = palette_text(*cols, sparkle=sparkle, sparkle_color=SPARKLE_COLOR[key],
                                                                          brightness=VIDEO_BRIGHTNESS if role == "video" else 100)
             self._pal[(key, role)] = len(self.pals) - 1
@@ -444,6 +446,11 @@ def add_showstoppers(sq: Seq, bars, bar_kind, bar_peak, bar_pal, secs, seed: str
 
 MH_VERSE = ("fan", "sway", "breathe", "banks", "circle", "swivel")
 MH_CHORUS = ("pingpong", "cross", "chase", "pump", "scissor", "spin", "wave")
+# --more-moves (2026-11-06): extra patterns joined to the pools only when asked, so older songs keep their seeded picks.
+# verse cascade = heads light one after another across the bar; seesaw = the whole fan rocks left/right per bar.
+# chorus burst = pairs fire from the centre outward and back in per eighth note; stutter = wide fan, dimmer strobing per beat.
+MH_VERSE_MORE = ("cascade", "seesaw")
+MH_CHORUS_MORE = ("burst", "stutter")
 # Pan patterns, copied from the user's own MH sequences in E:/2023/ShowFolder3D (Beautiful People, The Hockey Song):
 # tilt held at 45, pan swept -50 <-> +50 around pan 0 (facing the audience) once per beat (300-500 ms), or a full turn
 # -180 <-> +180 in 600-1300 ms, the direction alternating.
@@ -452,7 +459,8 @@ MH_SWEEP = 50.0
 MH_PAN_MAX_DEG_S = 120.0  # fastest pan a real head does smoothly; a full turn per 0.9 s looked fake (user, 2026-11-01)
 
 
-def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None = None) -> None:
+def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None = None, more: bool = False,
+                     drops=(), hits=None) -> None:
     """White moving-head moves tied to the sections: a 'pool' in verses, a sweep on each section change, a beat
     pattern in choruses, a skyward strobe burst on peak-chorus downbeats and a converge-and-fade over the last two
     bars. Heads are dark between effects. Lean moves use pan 90 -/+ MH_FRONT (tilt = left/right lean, beam turned
@@ -463,7 +471,12 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
 
     With a seed (the song name) every section draws its verse pattern from MH_VERSE, its chorus pattern from
     MH_CHORUS and its sweep direction, never repeating the previous section's pick, so songs and sections move
-    differently. seed None (--classic-look) keeps the original fan / ping-pong / outside-in sweep throughout."""
+    differently. seed None (--classic-look) keeps the original fan / ping-pong / outside-in sweep throughout.
+    more adds MH_VERSE_MORE / MH_CHORUS_MORE to the pools. drops (bar indices, bass drops): two beats of straight-up
+    strobe, then the fan explodes outward over the rest of the bar. hits ([(ms, strength 0..1)], --mh-hits): from the
+    first drop (or the second section) on, verse and chorus bars follow the drum accents instead: each accent is a
+    flash with a fast decay; the bar's strongest accents fire all heads and toggle wide/narrow (choruses snap open from
+    upright), the lighter ones alternate odd/even heads leaning left/right."""
     from video_beams_to_xsq import mh_settings  # full xLights key set, so the effects survive export/import
 
     n = len(bars) - 1
@@ -504,6 +517,10 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
     PING_DIM = curve((0, 1), (1, 0))
     BURST_DIM = curve((0, 1), (0.12, 0), (0.25, 1), (0.37, 0), (0.5, 1), (0.62, 0), (0.75, 1), (1, 0))
     OUTRO_DIM = curve((0, 0), (0.4, 0.8), (1, 0))
+    STUTTER_DIM = curve((0, 1), (0.2, 0), (0.4, 1), (0.6, 0), (0.8, 1), (1, 0))
+    # the new patterns are listed three times so a song asking for them actually gets them
+    verse_pool = MH_VERSE + (MH_VERSE_MORE * 3 if more else ())
+    chorus_pool = MH_CHORUS + (MH_CHORUS_MORE * 3 if more else ())
 
     kind = ["pool"] * n
     for i in range(n):
@@ -513,14 +530,17 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
         kind[min(range(n), key=lambda j: abs(bars[j] - s0))] = "sweep"
     if n >= 6:
         kind[n - 2] = kind[n - 1] = "outro"
+    for i in drops:
+        if 0 <= i < n:
+            kind[i] = "drop"
 
     # per section: (verse pattern, chorus pattern, sweep outside-in?)
     rng = random.Random(seed + "/heads") if seed else None
     style, last = [], ("fan", "pingpong")
     for _ in secs:
         if rng:
-            v = rng.choice([p for p in MH_VERSE if p != last[0]])
-            c = rng.choice([p for p in MH_CHORUS if p != last[1]])
+            v = rng.choice([p for p in verse_pool if p != last[0]])
+            c = rng.choice([p for p in chorus_pool if p != last[1]])
             style.append((v, c, rng.random() < 0.5))
             last = (v, c)
         else:
@@ -550,6 +570,15 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
                     for b, bi in enumerate(chunk):
                         d = 1 if b % 2 == 0 else -1
                         put(h, bars[bi], bars[bi + 1], MH_PAN_TILT, MH_PAN_TILT, FADE_UP_DOWN, -MH_SWEEP * d, MH_SWEEP * d)
+                elif pat == "cascade":  # heads light one after another across each bar, the order reversing per bar
+                    for b, bi in enumerate(chunk):
+                        bs, be = bars[bi], bars[bi + 1]
+                        order = h if (c + b) % 2 == 0 else 7 - h
+                        put(h, bs + (be - bs) * order // 16, be, fan(h) * 20, fan(h) * 28, FADE_UP_DOWN)
+                elif pat == "seesaw":  # the whole fan rocks: every head sweeps 30 degrees right, then left next bar
+                    for b, bi in enumerate(chunk):
+                        d = 1 if (c + b) % 2 == 0 else -1
+                        put(h, bars[bi], bars[bi + 1], fan(h) * 20 - 15 * d, fan(h) * 20 + 15 * d, FADE_UP_DOWN)
                 elif pat == "banks" and len(chunk) == 2:  # left four on the first bar, right four on the second
                     left = h < 4
                     b0, b1 = (s, bars[chunk[0] + 1]) if left == (sign > 0) else (bars[chunk[0] + 1], e)
@@ -558,8 +587,35 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
                     put(h, s, e, fan(h) * 12, fan(h) * 12, FADE_UP_DOWN)
         pool_run.clear()
 
+    HIT_DIM = curve((0, 1), (0.25, 0.45), (1, 0))
+    hit_from = (bars[min(drops)] if drops else (secs[1][0] if len(secs) > 1 else 0)) if hits else None
     count = 0
     for i in range(n):
+        if hits and kind[i] in ("pool", "chorus") and bars[i] >= hit_from - 1:
+            flush_pool()
+            s, e = bars[i], bars[i + 1]
+            # an accent up to 100 ms before the bar line belongs to this bar (detected downbeats run a little late)
+            acc = [(max(t, s), v) for t, v in hits if s - 100 <= t < e - 100] or [(s, 1.0)]
+            top = max(v for _, v in acc)
+            ch = kind[i] == "chorus"
+            for j, (t, v) in enumerate(acc):
+                end = min(t + (450 if ch else 600), acc[j + 1][0] if j + 1 < len(acc) else e, e)
+                if v >= 0.8 * top:  # a heavy hit: every head
+                    wide = (i + j) % 2 == 0
+                    for h in range(8):
+                        if ch:
+                            put(h, t, end, fan(h) * 8, fan(h) * (45 if wide else 30), HIT_DIM)
+                        else:
+                            put(h, t, end, fan(h) * (30 if wide else 14), fan(h) * (34 if wide else 18), HIT_DIM)
+                else:  # a lighter hit: odd or even heads, leaning one way then the other
+                    odd = j % 2
+                    lean = 20 if (i + j) % 2 == 0 else -20
+                    for h in range(odd, 8, 2):
+                        put(h, t, end, fan(h) * 15 + lean * 0.5, fan(h) * 15 + lean, HIT_DIM)
+            if bar_peak[i] and ch and acc[0][0] - s < 120:
+                pass  # the downbeat accent already fires every head
+            count += 1
+            continue
         if kind[i] == "pool":
             if pool_run and pool_run[-1] != i - 1:
                 flush_pool()
@@ -568,7 +624,12 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
         flush_pool()
         s, e = bars[i], bars[i + 1]
         verse_pat, pat, inward = style[sec_of(i)]
-        if kind[i] == "sweep":  # outside to inside over the bar, or inside out
+        if kind[i] == "drop":  # bass drop: two beats of straight-up strobe, then the fan explodes outward
+            mid = s + (e - s) // 2
+            for h in range(8):
+                put(h, s, mid, 0, 0, BURST_DIM)
+                put(h, mid, e, fan(h) * 10, fan(h) * 60, SWEEP_DIM)
+        elif kind[i] == "sweep":  # outside to inside over the bar, or inside out
             a, b = (55, 10) if inward else (5, 50)
             for h in range(8):
                 put(h, s, e, fan(h) * a, fan(h) * b, SWEEP_DIM)
@@ -590,6 +651,26 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
                         # the direction alternates per beat (wave) or per bar (spin), so each move starts where the last ended
                         d = (1 if (k if step == 1 else i) % 2 == 0 else -1) * (1 if h % 2 == 0 or pat == "wave" else -1)
                         put(h, q[k], q[k + step], MH_PAN_TILT, MH_PAN_TILT, PING_DIM, -a * d, a * d)
+                count += 1
+                continue
+            if pat == "burst":  # pairs fire from the centre outward over the first half bar, from the edges back in after
+                eighth = [s + (e - s) * k // 8 for k in range(9)]
+                for k in range(8):
+                    if k < 2 and bar_peak[i]:
+                        continue
+                    r = k if k < 4 else 7 - k  # 0 = centre pair .. 3 = outer pair
+                    for h in (3 - r, 4 + r):
+                        put(h, eighth[k], eighth[k + 1], fan(h) * 30, fan(h) * 45, PING_DIM)
+                if bar_peak[i]:
+                    for h in range(8):
+                        put(h, q[0], min(q[0] + 500, q[1]), 0, 0, BURST_DIM)
+                count += 1
+                continue
+            if pat == "stutter":  # a wide fan per beat, its dimmer strobing; the fan narrows/widens beat to beat
+                for k in range(4):
+                    w = 35 if k % 2 == 0 else 18
+                    for h in range(8):
+                        put(h, q[k], q[k + 1], fan(h) * w, fan(h) * w, STUTTER_DIM if not (k == 0 and bar_peak[i]) else BURST_DIM)
                 count += 1
                 continue
             if pat == "chase":  # one head per eighth note, left to right, right to left next bar
@@ -642,6 +723,104 @@ def add_moving_heads(sq: Seq, bars, bar_kind, bar_peak, secs, seed: str | None =
     print(f"moving heads: {count} non-pool bars, 8 heads, white, {pre} pre-position effects; verse/chorus: {', '.join(used)}")
 
 
+METEORS_RAIN = ("E_CHECKBOX_Meteors_UseMusic=0,E_CHOICE_Meteors_Effect=Down,E_CHOICE_Meteors_Type=Palette,"
+                "E_SLIDER_Meteors_Count=10,E_SLIDER_Meteors_Length=25,E_SLIDER_Meteors_Speed=15,"
+                "E_SLIDER_Meteors_Swirl_Intensity=0")
+# props that take part in a whole-house shockwave (one Per Preview ring drawn across all of them)
+DROP_PROPS = ("House Outline", "Icicles", "Arches", "Trees", "Pixel Forest", "Trees Stars", "Stars", "Mega Topper",
+              "Mega Tree", "Matrix", "SS Spinner", "SS Snowflake")
+DROP_SHOCK = ("B_CHOICE_BufferStyle=Per Preview,B_CHOICE_PerPreviewCamera=2D,E_CHECKBOX_Shockwave_Blend_Edges=0,"
+              "E_CHECKBOX_Shockwave_Scale=1,E_CHOICE_Shockwave_TimingTrack=,E_NOTEBOOK_Shockwave=Position,"
+              "E_SLIDER_Shockwave_Accel=0,E_SLIDER_Shockwave_CenterX=50,E_SLIDER_Shockwave_CenterY=40,"
+              "E_SLIDER_Shockwave_Cycles=1,E_SLIDER_Shockwave_End_Radius=140,E_SLIDER_Shockwave_End_Width=45,"
+              "E_SLIDER_Shockwave_Start_Radius=1,E_SLIDER_Shockwave_Start_Width=25,T_CHECKBOX_Canvas=0,"
+              "T_CHECKBOX_LayerMorph=0,T_CHOICE_LayerMethod=Normal,T_SLIDER_EffectLayerMix=0,T_TEXTCTRL_Fadeout=0.3")
+
+
+def bass_drops(mp3: Path, bars, min_gap: int = 4) -> list[int]:
+    """Bar indices where the bass (30-150 Hz) jumps: the next two bars at least 1.3x the previous two and at least
+    25% of the loudest two-bar bass (the first drop of a song is often its quietest beat). Drops closer than min_gap bars keep the strongest."""
+    import librosa
+    import numpy as np
+    y, sr = librosa.load(str(mp3), sr=22050, mono=True)
+    S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
+    f = librosa.fft_frequencies(sr=sr, n_fft=2048)
+    bass = S[(f >= 30) & (f <= 150)].sum(0)
+    t = librosa.frames_to_time(np.arange(len(bass)), sr=sr, hop_length=512) * 1000
+
+    def mean(a, b):
+        m = (t >= a) & (t < b)
+        return float(bass[m].mean()) if m.any() else 0.0
+
+    n = len(bars) - 1
+    per = [mean(bars[i], bars[i + 1]) for i in range(n)]
+    two = [sum(per[i:i + 2]) / len(per[i:i + 2]) for i in range(n)]
+    top = max(two or [1.0])
+    cand = []
+    for i in range(2, n - 1):
+        before = (per[i - 2] + per[i - 1]) / 2
+        if two[i] >= 0.25 * top and two[i] >= 1.3 * max(before, 1e-9):
+            cand.append((two[i] / max(before, 1e-9), i))
+    picked = []
+    for score, i in sorted(cand, reverse=True):
+        if all(abs(i - j) >= min_gap for j in picked):
+            picked.append(i)
+    return sorted(picked)
+
+
+def drum_accents(mp3: Path, min_gap_ms: int = 280) -> list[tuple[int, float]]:
+    """Drum accents: onset peaks of the percussive part (low end weighted), each scaled by the loudest onset within
+    +-1.5 s so quiet and loud passages both get accents; weak ones (< 0.45) dropped. [(ms, 0..1)]."""
+    import librosa
+    import numpy as np
+    from scipy.signal import find_peaks
+    y, sr = librosa.load(str(mp3), sr=22050, mono=True)
+    yp = librosa.effects.percussive(y)
+    hop = 256
+    S = np.abs(librosa.stft(yp, n_fft=2048, hop_length=hop))
+    f = librosa.fft_frequencies(sr=sr, n_fft=2048)
+    lo = S[(f >= 30) & (f < 150)].sum(0)
+    full = S.sum(0)
+    on = lambda e: np.maximum(0, np.diff(e, prepend=e[0])) / max(float(e.max()), 1e-9)
+    o = 2 * on(lo) + on(full)
+    w = int(1.5 * sr / hop)
+    local = np.array([o[max(0, k - w):k + w].max() for k in range(len(o))])
+    pk, _ = find_peaks(o, distance=int(min_gap_ms / 1000 * sr / hop))
+    t = librosa.frames_to_time(pk, sr=sr, hop_length=hop) * 1000
+    out = [(int(tt), float(o[k] / local[k])) for tt, k in zip(t, pk) if local[k] > 0 and o[k] / local[k] >= 0.45
+           and o[k] >= 0.08 * o.max()]
+    return out
+
+
+DROP_FLASH_MS = 150
+DROP_RING_MS = 2500
+
+
+def drop_effects(sq: Seq, lay, drops_ms) -> None:
+    """Per drop: a short white On flash on the whole display, then one solid white ring (hard edge, Per Preview)
+    sweeping out from the house centre. The first version (white->yellow, soft edges, a second ring overlapping the
+    first on the same layer, 1.6 s) read as a faint tint; the user did not see it."""
+    pal = str(sq.pal("verse", "dropwhite"))
+    for t in drops_ms:
+        ET.SubElement(lay, "Effect", {"name": "On", "startTime": str(t), "endTime": str(t + DROP_FLASH_MS),
+                                      "ref": str(sq.ref(ON)), "palette": pal})
+        ET.SubElement(lay, "Effect", {"name": "Shockwave", "startTime": str(t + DROP_FLASH_MS),
+                                      "endTime": str(t + DROP_FLASH_MS + DROP_RING_MS),
+                                      "ref": str(sq.ref(DROP_SHOCK)), "palette": pal})
+
+
+def add_drop_shockwaves(sq: Seq, bars, drops, bar_pal) -> None:
+    """Whole-house hit on each bass drop (drop_effects) on a new top layer of every prop row that has effects
+    (black is transparent there, so the props' own effects keep running around the ring)."""
+    rows = [m for m in DROP_PROPS
+            if any(e.get("name") == m and e.get("type") == "model" and e.findall(".//Effect") for e in sq.eff)]
+    for m in rows:
+        lay = ET.Element("EffectLayer")
+        sq.layers(m).insert(0, lay)
+        drop_effects(sq, lay, [bars[i] for i in drops])
+    print(f"bass drops at {', '.join(f'{bars[i] / 1000:.1f}s' for i in drops) or 'none'}: white flash + shockwave on {', '.join(rows)}")
+
+
 def order_rows(sq: Seq, show_dir: Path) -> None:
     """Master view order: model groups first, then models, each alphabetical. Timing rows keep their slots."""
     groups = {g.get("name") for g in ET.parse(show_dir / "xlights_rgbeffects.xml").getroot().iter("modelGroup")}
@@ -678,6 +857,14 @@ def main() -> None:
     ap.add_argument("--no-heads", action="store_true", help="leave the moving heads (MH-1..MH-8) blank")
     ap.add_argument("--look-video", help="the song's video: its main hues become the colour story (song_look.py)")
     ap.add_argument("--classic-look", action="store_true", help="old fixed colour story and shader rotation for every song")
+    ap.add_argument("--half-time", action="store_true",
+                    help="tempo was detected double: keep every other downbeat (the parity with the stronger kick)")
+    ap.add_argument("--sections", help='JSON list overriding the detected sections: [[start_s, end_s, "verse|chorus|outro|intro", energy], ...]')
+    ap.add_argument("--drops", help='whole-house shockwaves + moving-head burst on bass drops: "auto" or seconds, e.g. "22.5,67.3"')
+    ap.add_argument("--mh-hits", action="store_true",
+                    help="moving heads flash/snap on the detected drum accents in verses and choruses (heavy-beat songs)")
+    ap.add_argument("--more-moves", action="store_true",
+                    help="new moving-head patterns (cascade/seesaw, burst/stutter) and Meteors rain on the Icicles in choruses")
     args = ap.parse_args()
     globals()["VIDEO_BRIGHTNESS"] = args.video_brightness
     if not args.classic_look:
@@ -701,10 +888,28 @@ def main() -> None:
     mp3 = Path(args.mp3) if args.mp3 else xsq.with_suffix(".mp3")
 
     beats = detect_beats(mp3)
-    parts = detect_structure(mp3)
+    if args.sections:
+        from types import SimpleNamespace
+        parts = [SimpleNamespace(label=lab, start_time=float(a), end_time=float(b), energy_level=float(en))
+                 for a, b, lab, en in json.load(open(args.sections, encoding="utf-8"))]
+    else:
+        parts = detect_structure(mp3)
     secs = section_plan(parts, None)
     dur = int(float(ET.parse(xsq).getroot().findtext("head/sequenceDuration")) * 1000)
     bars = [int(t * 1000) for t in beats.downbeat_times]
+    tempo = beats.tempo
+    if args.half_time and len(bars) > 3:
+        import librosa
+        import numpy as np
+        y, sr = librosa.load(str(mp3), sr=22050, mono=True)
+        S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
+        bass = S[(librosa.fft_frequencies(sr=sr, n_fft=2048) <= 150)].sum(0)
+        idx = librosa.time_to_frames(np.array(bars) / 1000, sr=sr, hop_length=512).clip(0, len(bass) - 3)
+        kick = [float(bass[k:k + 3].max()) for k in idx]
+        par = 0 if sum(kick[0::2]) >= sum(kick[1::2]) else 1
+        bars = bars[par::2]
+        tempo /= 2
+        print(f"half time: kept downbeat parity {par}")
     # a song that opens before the first detected downbeat (intro, count-in): extend the bar grid back to 0
     if len(bars) > 1 and bars[0] > 0:
         period = bars[1] - bars[0]
@@ -715,7 +920,7 @@ def main() -> None:
             t -= period
         bars = [0] + lead[::-1] + bars
     bars.append(min(dur, bars[-1] + (bars[-1] - bars[-2])))
-    print(f"{beats.tempo:.0f} BPM, {len(bars) - 1} bars, {len(secs)} sections")
+    print(f"{tempo:.0f} BPM, {len(bars) - 1} bars, {len(secs)} sections")
 
     bak = xsq.with_suffix(".xsq.bak")
     if not bak.exists():
@@ -827,7 +1032,11 @@ def main() -> None:
             sq.add(m, 0, "On", bars[b0], bars[b1 + 1], ON_TINT, pk, role="treetint")
     # Icicles: wash per 2 bars, FloodLights: wash per section
     for i in range(0, n, 2):
-        sq.add("Icicles", 0, "On", bars[i], bars[min(i + 2, n)], ON, bar_pal[i])
+        if args.more_moves and bar_kind[i] == "chorus":  # choruses: Meteors raining down the icicles, one per bar
+            for j in range(i, min(i + 2, n)):
+                sq.add("Icicles", 0, "Meteors", bars[j], bars[j + 1], METEORS_RAIN, bar_pal[j])
+        else:
+            sq.add("Icicles", 0, "On", bars[i], bars[min(i + 2, n)], ON, bar_pal[i])
     for s0, s1, kind, _ in secs:
         idx = [i for i in range(n) if s0 <= bars[i] < s1]
         if idx:
@@ -841,10 +1050,19 @@ def main() -> None:
         add_lyric_words(sq, tree_blocks, bars)
     if not args.no_radio:
         add_radio(sq, bars, bar_kind, bar_peak, bar_pal, tree_blocks, ET.parse(xsq).getroot().findtext("head/song") or xsq.stem, dur, args.artist)
+    drops = []
+    if args.drops == "auto":
+        drops = bass_drops(mp3, bars)
+    elif args.drops:
+        drops = sorted({min(range(n), key=lambda j: abs(bars[j] - float(x) * 1000)) for x in args.drops.split(",")})
     if not args.no_heads:
-        add_moving_heads(sq, bars, bar_kind, bar_peak, secs, None if args.classic_look else xsq.stem)
+        add_moving_heads(sq, bars, bar_kind, bar_peak, secs, None if args.classic_look else xsq.stem,
+                         more=args.more_moves, drops=drops, hits=drum_accents(mp3) if args.mh_hits else None)
     if not args.no_showstoppers:
         add_showstoppers(sq, bars, bar_kind, bar_peak, bar_pal, secs, xsq.stem)
+
+    if drops:
+        add_drop_shockwaves(sq, bars, drops, bar_pal)
 
     # hide model/group rows with no effects (timing rows stay as they are)
     used = {e.get("name") for e in sq.eff if e.get("type") == "model" and e.findall(".//Effect")}
