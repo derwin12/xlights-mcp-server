@@ -21,9 +21,9 @@ match them pixel for pixel (with smoothing and bounce off). That was checked wit
 moderngl harness (GL 3.3, xLights' preamble) and glslangValidator (Vulkan rules); the
 harness lived in the session scratchpad and is **not** in the repo yet (see below).
 
-In the show (F:\ShowFolderAI): Crazy and Fast Car have the Dance Crew shader on Matrix;
-`EL_Dan Bull Ive Got A Bone - Dance Crew.xsq` and `Luke Combs - Fast Car - Band Preview.xsq`
-are preview copies. Backups before the dancers: `*.xsq.dancers.bak` (separate from the
+In the show (F:\ShowFolderAI): Crazy has the Dance Crew shader on Matrix and Fast Car has
+the Skeleton Band there (the band replaced its dancers); `EL_Dan Bull Ive Got A Bone - Dance Crew.xsq`
+and `Luke Combs - Fast Car - Band Preview.xsq` are preview copies (the band preview now matches Fast Car). Backups before the dancers: `*.xsq.dancers.bak` (separate from the
 `.xsq.bak` that enhance_layout regenerates from).
 
 ## xLights gotchas learned
