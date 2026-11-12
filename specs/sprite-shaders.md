@@ -13,8 +13,10 @@ Built 2026-11-11, inspired by the skeleton/LED-panel scenes in a Game Changers A
 | Dance Crew shader generator (`Shaders/Dance Crew.fs`) | `src/xlights_mcp/sprites/shader.py` |
 | Skeleton band sprites (guitarist, singer, drummer) | `src/xlights_mcp/sprites/band.py` |
 | Band shader generator (`Shaders/Skeleton Band.fs`) and placement | `band_shader.py`, `band_place.py` |
+| Sky Shooter (Christmas formation shooter): game rules, simulation, renderer | `src/xlights_mcp/sprites/shooter.py` |
+| Sky Shooter shader generator (`Shaders/Sky Shooter.fs`) and placement | `shooter_shader.py`, `shooter_place.py` |
 | Drum hits from audio (shared with enhance_layout `--mh-hits`) | `src/xlights_mcp/audio/drums.py` |
-| CLIs | `scripts/dance_crew.py`, `scripts/skeleton_band.py` |
+| CLIs | `scripts/dance_crew.py`, `scripts/skeleton_band.py`, `scripts/sky_shooter.py` |
 
 The Python sprites are the source of truth. The shaders are generated from them and must
 match them pixel for pixel (with smoothing and bounce off). That was checked with a
@@ -25,6 +27,10 @@ In the show (F:\ShowFolderAI): Crazy has the Dance Crew shader on Matrix and Fas
 the Skeleton Band there (the band replaced its dancers); `EL_Dan Bull Ive Got A Bone - Dance Crew.xsq`
 and `Luke Combs - Fast Car - Band Preview.xsq` are preview copies (the band preview now matches Fast Car). Backups before the dancers: `*.xsq.dancers.bak` (separate from the
 `.xsq.bak` that enhance_layout regenerates from).
+
+Raining Tacos (rebuilt with song_to_package on 2026-11-11; the empty shell is `.xsq.empty.bak`) has the band in
+the verses and the dancers in the choruses/outro on Matrix. Sky Shooter keeps no state in the shader: the placer
+plays the game out over the song and passes each bar's starting state (alive mask, wave, fly-in, song beat).
 
 ## xLights gotchas learned
 
@@ -63,8 +69,9 @@ and `Luke Combs - Fast Car - Band Preview.xsq` are preview copies (the band prev
    snare hits); bars longer than 4 beats lose slots past 16; the order is fixed (guitar,
    singer, drums); drum hits from audio take ~20 s per song (librosa) on every run.
 9. **Remaining video ideas**: Beat Runner side-scroller (runner jumps on beats, coins on drum
-   hits), parade/chase across the matrix, sound bars around a centre picture, beat-timed
-   greeting text.
+   hits), an original maze chase (own characters and maze, not a Pac-Man copy), parade/chase
+   across the matrix, sound bars around a centre picture, beat-timed greeting text. Sky Shooter
+   could add divers on drops and a Halloween theme.
 10. **MCP tools**: the dancers and band are scripts only; expose them as MCP tools if they
     should be usable from chat.
 11. **Clean-up in the show folder**: decide whether to keep the two preview copies and the
