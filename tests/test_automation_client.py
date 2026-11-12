@@ -161,3 +161,57 @@ def test_export_video_preview_passes_size_only_when_both_given(monkeypatch):
     assert calls[1][1] == {"filename": "C:/tmp/b.mp4", "width": "1920", "height": "1058"}
     assert calls[2][1] == {"filename": "C:/tmp/c.mp4"}
     assert all(c[0] == "exportVideoPreview" for c in calls)
+
+
+def _capture_call(monkeypatch):
+    calls = []
+
+    def fake_call(cmd, host=None, port=None, timeout=30.0, **params):
+        calls.append({"cmd": cmd, "host": host, "port": port, "timeout": timeout, "params": params})
+        return {"res": 200}
+
+    monkeypatch.setattr(automation_client, "call", fake_call)
+    return calls
+
+
+def test_run_command_passes_params_through(monkeypatch):
+    calls = _capture_call(monkeypatch)
+    automation_client.run_command(
+        "batchRender", {"seqs": ["a.xsq", "b.xsq"], "promptIssues": "false"}, port=49914
+    )
+    assert calls == [{
+        "cmd": "batchRender",
+        "host": None,
+        "port": 49914,
+        "timeout": automation_client._RENDER_TIMEOUT,
+        "params": {"seqs": ["a.xsq", "b.xsq"], "promptIssues": "false"},
+    }]
+
+
+def test_run_command_default_and_explicit_timeout(monkeypatch):
+    calls = _capture_call(monkeypatch)
+    automation_client.run_command("lightsOn")
+    automation_client.run_command("renderAll", timeout=5)
+    assert calls[0]["timeout"] == automation_client._DEFAULT_TIMEOUT
+    assert calls[0]["params"] == {}
+    assert calls[1]["timeout"] == 5
+
+
+@pytest.mark.parametrize("key", ["cmd", "host", "port", "timeout"])
+def test_run_command_rejects_reserved_param_names(monkeypatch, key):
+    calls = _capture_call(monkeypatch)
+    with pytest.raises(AutomationError):
+        automation_client.run_command("lightsOn", {key: "x"})
+    assert calls == []
+
+
+def test_xlights_command_tool_returns_error_dict(monkeypatch):
+    from xlights_mcp import server
+
+    def failing_call(cmd, host=None, port=None, timeout=30.0, **params):
+        raise AutomationError("unreachable")
+
+    monkeypatch.setattr(automation_client, "call", failing_call)
+    fn = getattr(server.xlights_command, "fn", server.xlights_command)
+    assert fn("lightsOn") == {"error": "unreachable"}
+    assert fn("  ") == {"error": "cmd is required"}

@@ -859,6 +859,44 @@ def save_sequence_live(
         return {"error": str(e)}
 
 
+@mcp.tool()
+def xlights_command(
+    cmd: str,
+    params: dict | None = None,
+    host: str | None = None,
+    port: int | None = None,
+    timeout: float | None = None,
+) -> dict:
+    """Run any xLights automation command by name in a running xLights.
+
+    Use this for anything the dedicated live tools don't cover, e.g.
+    lightsOn/lightsOff, uploadController, batchRender, getControllers,
+    getEffectIDs, deleteEffect, closeSequence. The full command list and
+    parameters are in xLights' "documentation/xlDo Commands.txt".
+
+    Note: loadSequence always reloads from disk and discards unsaved edits,
+    even when that sequence is already open.
+
+    Args:
+        cmd: Automation command name, e.g. "lightsOn", "uploadController".
+        params: Command parameters as key/value pairs, e.g.
+            {"ip": "192.168.1.50"}. Arrays are flattened by xLights to
+            name_0, name_1, ... (e.g. batchRender's "seqs").
+        host: Automation host. Defaults to 127.0.0.1 (or XLIGHTS_AUTOMATION_HOST).
+        port: Automation port. Defaults to 49913 / instance A (or XLIGHTS_AUTOMATION_PORT).
+        timeout: Seconds to wait. Defaults to 30, or 30 minutes for
+            render/export/upload commands.
+    """
+    from xlights_mcp.xlights.automation_client import run_command, AutomationError
+
+    if not cmd or not cmd.strip():
+        return {"error": "cmd is required"}
+    try:
+        return run_command(cmd.strip(), params, host=host, port=port, timeout=timeout)
+    except AutomationError as e:
+        return {"error": str(e)}
+
+
 # ---------------------------------------------------------------------------
 # Audio Analysis Tools
 # ---------------------------------------------------------------------------

@@ -84,6 +84,44 @@ def call(
     return data
 
 
+# Commands that render, export or upload and can run far past the default timeout.
+_LONG_RUNNING_CMDS = frozenset({
+    "renderAll",
+    "batchRender",
+    "exportVideoPreview",
+    "exportModel",
+    "exportModelWithRender",
+    "uploadController",
+    "uploadFPP",
+    "uploadSequence",
+    "checkSequence",
+    "packageSequence",
+    "packageLogFiles",
+})
+
+
+def run_command(
+    cmd: str,
+    params: dict | None = None,
+    *,
+    host: str | None = None,
+    port: int | None = None,
+    timeout: float | None = None,
+) -> dict:
+    """Run any xlDoAutomation command by name with raw params.
+
+    Lists and dicts in params are sent as JSON; xLights flattens arrays to
+    name_0, name_1, ... and re-serializes objects itself.
+    """
+    params = dict(params or {})
+    for reserved in ("cmd", "host", "port", "timeout"):
+        if reserved in params:
+            raise AutomationError(f"'{reserved}' can't be passed inside params")
+    if timeout is None:
+        timeout = _RENDER_TIMEOUT if cmd in _LONG_RUNNING_CMDS else _DEFAULT_TIMEOUT
+    return call(cmd, host=host, port=port, timeout=timeout, **params)
+
+
 def get_version(*, host: str | None = None, port: int | None = None) -> dict:
     return call("getVersion", host=host, port=port)
 
