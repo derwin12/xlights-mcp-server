@@ -90,3 +90,19 @@ def test_place_shooter_simulates_across_bars(tmp_path):
     assert bin(int(second) // 100).count("1") == 10 and "songBeat=400," in texts[1]
     pal = root.find("ColorPalettes")[int(model.findall("EffectLayer")[0][0].get("palette"))].text
     assert pal.startswith("C_BUTTON_Palette1=#DC1E28")
+
+
+def test_game_starts_fresh_where_it_is_first_shown(tmp_path):
+    beats = "".join(f'<Effect label="{i % 4 + 1}" startTime="{i * 400}" endTime="{i * 400 + 400}"/>' for i in range(8))
+    kicks = "".join(f'<Effect startTime="{t}" endTime="{t + 10}"/>' for t in (400, 800, 1200))
+    secs = ('<Element type="timing" name="Sections"><EffectLayer><Effect label="Verse 1" startTime="0" '
+            'endTime="1600"/><Effect label="Ending" startTime="1600" endTime="3200"/></EffectLayer></Element>')
+    text = XSQ.format(beats=beats, kicks=kicks).replace("<ElementEffects>", "<ElementEffects>" + secs)
+    (tmp_path / "song.xsq").write_text(text, encoding="utf-8")
+    (tmp_path / "xlights_rgbeffects.xml").write_text(RGB, encoding="utf-8")
+    res = sp.place_shooter(tmp_path / "song.xsq", tmp_path, ["Matrix"], section_track="Sections", off_sections=["verse"])
+    assert res[0].effects == 1
+    root = ET.parse(tmp_path / "song.xsq").getroot()
+    model = next(e for e in root.iter("Element") if e.get("name") == "Matrix")
+    text = root.find("EffectDB")[int(model.findall("EffectLayer")[0][0].get("ref"))].text
+    assert f"alive={g.ALL_ALIVE * 100}," in text and "E_CHECKBOX_SHADERXYZZY_entry=1" in text   # a fresh wave

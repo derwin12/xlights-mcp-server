@@ -1,6 +1,6 @@
 """Put Sky Shooter (shooter_shader.py) on matrix models of an .xsq, one Shader effect per bar.
 
-The game is played out over the whole song first (shooter.simulate) using the same
+The game is played out first (shooter.simulate) over the bars it is shown in, using the same
 kick sources as the skeleton band (Kick Hits track, else drum hits in the audio, else
 beats 1 and 3), so every bar's effect starts from the right wave and survivors.
 Like the dancers and the band it skips matrices with a Video, steps aside for the
@@ -36,7 +36,8 @@ def place_shooter(xsq: Path, show: Path, models: list[str], colours: list[str] |
                   energy: float = 1.0, track: str = "Beats", section_track: str | None = None,
                   section_colours: dict[str, list[str]] | None = None, off_sections: list[str] | None = None,
                   over_video: bool = False, over_pictures: bool = False,
-                  media: Path | None = None) -> list[ShooterPlacement]:
+                  media: Path | None = None, start_s: float = 0.0,
+                  end_s: float | None = None) -> list[ShooterPlacement]:
     sq = Xsq(xsq)
     beats = read_beats(sq.root, track)
     bars = group_bars(beats)
@@ -51,8 +52,15 @@ def place_shooter(xsq: Path, show: Path, models: list[str], colours: list[str] |
         mf = sq.root.findtext("head/mediaFile")
         media = Path(mf) if mf else None
     kicks, ksrc = kick_times(sq.root, media, beats)
-    masks = [slot_masks(b[0][0], b[-1][1], len(b), kicks, [])[0] for b in bars]
-    states = g.simulate(masks, [len(b) for b in bars])
+    labels = [next((lab for s, e, lab in sections if s <= b[0][0] < e), None) for b in bars]
+    shown = [(b, lab) for b, lab in zip(bars, labels)
+             if (lab is None or not section_key(lab, off)) and b[0][0] >= start_s * 1000
+             and (end_s is None or b[-1][1] <= end_s * 1000)]
+    if not shown:
+        raise ValueError("no bars left to play in (sections off or the time range)")
+    # the game is played over the bars it is shown in, so it starts with a fresh wave when it first appears
+    masks = [slot_masks(b[0][0], b[-1][1], len(b), kicks, [])[0] for b, _ in shown]
+    states = g.simulate(masks, [len(b) for b, _ in shown])
     path = show / "Shaders" / SHADER_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(build_shader(), encoding="utf-8")
@@ -71,11 +79,8 @@ def place_shooter(xsq: Path, show: Path, models: list[str], colours: list[str] |
         busy = [] if over_pictures else busy_spans(el)
         layer = ET.Element("EffectLayer")
         count = 0
-        for bar, st in zip(bars, states):
+        for (bar, label), st in zip(shown, states):
             t0, t1 = bar[0][0], bar[-1][1]
-            label = next((lab for s, e, lab in sections if s <= t0 < e), None)
-            if label is not None and section_key(label, off):
-                continue
             cs = colours
             if label is not None:
                 k = section_key(label, section_colours)
