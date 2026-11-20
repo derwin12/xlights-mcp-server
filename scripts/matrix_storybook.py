@@ -74,6 +74,14 @@ class Timing:
                 self.bars = [int(f.get("startTime")) / 1000 for f in layers[0]]
             elif name == "Sections":
                 self.sections = [(f.get("label"), int(f.get("startTime")) / 1000) for f in layers[0]]
+            elif not self.beats and name not in ("Lyrics",) and layers[0] and all(
+                    (f.get("label") or "").isdigit() for f in layers[0]):
+                # no Beats track yet: a counted 1-2-3-4 track (e.g. a vendor's "Timing") gives beats and bars
+                self._counted = [(f.get("label"), int(f.get("startTime")) / 1000) for f in layers[0]]
+        if not self.beats and getattr(self, "_counted", None):
+            self.beats = [s for _lab, s in self._counted]
+            if not self.bars:
+                self.bars = [s for lab, s in self._counted if lab == "1"]
 
     def w(self, key: str) -> float:
         """Start of a sung word: 'SHAKE#3' is the third SHAKE in the song (#1 if no number)."""

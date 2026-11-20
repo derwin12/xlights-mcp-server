@@ -9,6 +9,9 @@ Tool: `scripts/matrix_storybook.py` (run from `scripts/`, so stories can `import
 file in `scripts/stories/` with `build(tm) -> list[Scene]`. Examples:
 - `hippopotamus_for_christmas_mini.py`: **the reference.** This is the version the user approved, for a 25x24 mini matrix.
 - `hippopotamus_for_christmas.py`: a 48x27 layout plus the drawn props: stairs, cape, garage, chalkboard, pond, Santa hat, `hatted_hippo`, `toss`, `falling`. The mini story imports these props.
+- `fireflies.py`: 40x30 (Matrix 2 in F:\ShowFolderAI). Not a Christmas song. It has drawn fireflies (blinking dots), a jar,
+  a door opening a crack, sheep jumping a fence, and a `chorus()` function reused for 5 repeats. Its timing comes from a
+  vendor `.xsqz` (unzip it; use its `Sequences/*.xsq` as the timing source even when the video goes into another sequence).
 - `shake_the_snow_globe.py`: 30x40. Its sequence's lyric labels have since changed, so it no longer runs as-is.
 
 ```
@@ -34,11 +37,14 @@ python matrix_storybook.py stories/NAME.py "SHOW/SONG.xsq" "SHOW/Videos/<Song> S
   The intro instrumental gets a quiet scene with no text.
 - Scenes change on the lyric phrases, and pictures pop, bounce or pulse on sung words and beats. Things in a list get one
   scene each (e.g. doll, then teddy, then train, each with a 🚫).
+- Some emoji have a square background (🌠 shows as a blue tile) and don't work: check the sheet, then draw the prop or swap the emoji.
 - Light-coloured parts of a picture vanish against white snow at this size: put feet on black, or lower the ground.
 
 ## Workflow
 1. Read the sequence: `Timing(xsq)` gives `tm.words` (Lyrics word layer, labels are the sung case, e.g. "hippopotamus"),
-   `tm.beats`, `tm.duration`. Print the phrase layer and the words with times to plan scenes against the lyrics.
+   `tm.beats`, `tm.duration`. With no "Beats" track, a counted 1-2-3-4 track (e.g. a vendor's "Timing") is used as
+   beats and bars. Lyric labels may be capitals ("FIREFLIES"). If the timing comes from another sequence, check that
+   the audio matches (same duration; line its kick track up against the audio's onsets). Print the phrase layer and the words with times to plan scenes against the lyrics.
 2. Find the matrix and its current Video effect (`E_FILEPICKERCTRL_Video_Filename`). Note the model size (above).
 3. Write the story: one scene per phrase. Copy the patterns from the mini reference. Pictures are Noto emoji (Apache 2.0,
    fine in sold sequences). Props are drawn with PIL in story pixels (`P(v) = v * mb.SS`; read `mb.SS`/`mb.LW()` at draw time).
