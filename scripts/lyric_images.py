@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -66,7 +67,14 @@ def icon_png(emoji: str) -> Image.Image | None:
             print(f"  no Noto image for {emoji} ({code})")
             return None
         CACHE.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(r.content)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")  # atomic: parallel renders may fetch at once
+        tmp.write_bytes(r.content)
+        try:
+            os.replace(tmp, path)
+        except OSError:  # another process got there first and has it open (Windows)
+            tmp.unlink(missing_ok=True)
+            if not path.exists():
+                raise
     return Image.open(path).convert("RGBA")
 
 
