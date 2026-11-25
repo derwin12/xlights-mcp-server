@@ -1,21 +1,14 @@
 # Session Context
 
 ## Current Task
-Manual → wiki migration (skill `manual-to-wiki`). As of 2026-11-11, chapters #4, #6, #7 and #8 are done and live on the official wiki (last push 1f1f5ce). Remaining work is listed on derwin12/manual #10.
+Made a cover version of `E:\2023\ShowFolder3D\Blinding Lights - The Weeknd.xsq` for IMY2's cover (youtu.be/HEv5WF09isI). Finished; the user confirmed it works on 2026-11-17.
 
 ## Key Decisions
-- Shots that need edits are taken in the throwaway F:\ShowFolderWiki; you switch to it through File › Recent Show Folders, which is a permanent switch. Effects are added through `automation_client.add_effect`, and the sequence is closed with `close_sequence(force=True)`. Nothing is ever saved.
-- Push to staging first. Push to the official wiki only on the user's go-ahead, which was given for every push this session.
-- Avoid copyrighted lyrics in images: crop the lyric rows and use public-domain songs (Jingle Bells).
+- The cover runs 0.6 s ahead at the same tempo, so all effects and timing marks were shifted -600 ms. The custom garage video was kept, with Start Time moved from 1.00 to 1.60.
+- Abel was redrawn as the IMY2 singer: pose sprites are in `Images\IMY2 Dance\`, and the "IMY2" face definition uses images in `Faces\IMY2 Pixel - *.png`. The original Weeknd sequence and the Abel assets were not touched.
+- Kept the downloaded IMY2 YouTube video (AV1, which xLights can't open) at the user's request.
 
 ## Next Steps
-- #5 Layout (15 of 32 pages left): add Candy Cane, Channel Block, Circle, PolyLine, Label, Spinner and non-MH DMX models to ShowFolderWiki, then take the 29 needs-setup shots.
-- #19: refresh the 39 pre-2022 Sequencer images (Layer Blending 15, Changing An Effect 7, Layer Settings 5). Run `scripts/wiki/wiki_screenshot_todo.py --issue 19` afterwards.
-- Loose ends:
-  - Pixel Editor won't paint: try it by hand.
-  - LOR Enhanced Speed mismatch: 25000 vs 1000000.
-  - Possible xLights bugs, posted on #6: getEffectSettings JSON escaping; addEffect allows overlapping effects; the MIDI chooser's title is wrong.
-
-## Also in flight (details in memory + skills)
-- Dance Crew and Skeleton Band shaders for the matrices: built and in Crazy / Fast Car; open items in `specs/sprite-shaders.md`.
-- Christmas Techno Mix (F:\ShowFolderQA) and Eclipse6 (F:\ShowFolderAI) are still waiting on the user.
+- Optional: convert `Videos\Blinding Lights - IMY2 Youtube.mp4` to H.264 if it's ever needed.
+- Resume the manual → wiki migration (derwin12/manual #10; #5 Layout, #19 Sequencer images).
+- Still in flight: Dance Crew/Skeleton Band shaders (`specs/sprite-shaders.md`), Christmas Techno Mix, Eclipse6.

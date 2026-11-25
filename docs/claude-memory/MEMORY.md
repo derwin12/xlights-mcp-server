@@ -1,0 +1,15 @@
+- [xLights mask blend needs underlying effect](xlights-mask-blend-needs-underlying-effect.md) — Unmask modes ignored with no lower effect; use #010101 custom state color
+- [Test one sequence first](test-one-sequence-first.md) — bulk .xsq edits: summarize, apply to one, verify, then roll out
+- [Video beam to Moving Head project](video-beam-to-moving-head-project.md) — calibration (pan 90, tilt=lean), dimmer/shutter/slew/stale-render gotchas
+- [MH group fan effects](mh-group-fan-effects.md) — one group effect reproduces fans; slot/comma/sine-curve unit gotchas
+- [MH group above models](mh-group-above-models.md) — group element goes above MH-n in master view
+- [EL_ sequence prefix](el-sequence-prefix.md) — name EasyxLights PRO video sequences EL_<title> vN
+- [MH colour wheel](mh-color-wheel.md) — only wheel colours render (others white); snap beams to the wheel, same colour per beam colour
+- [EL head measurement](el-head-measurement.md) — strict vertical-beam frame for heads; check per-head detection share
+- [PPD_ sequence prefix](ppd-sequence-prefix.md) — Pixel Pro Displays video sequences are named PPD_<title> vN
+- [Vendor ground truth (Livingston)](vendor-ground-truth-livingston.md) — decoded vendor DMX; geometry + scores of our video conversion
+- [EL/PPD batch status](el-batch-status.md) — what is packaged, in progress, and how to resume the 81-video list
+- [Review video: new file, new player](review-video-new-player.md) — never overwrite the video under review; open a new player
+- [TuneTo model effects](tuneto-model-effects.md) — Text 'TITLE - ARTIST - TUNE TO 90.1FM' + Marquee on TuneTo; audio in <show>\Audio
+- [Render tools use MCP active show](render-tools-use-mcp-active-show.md) — switch_show before render_frame or a same-named sequence in another folder renders
+- [Window matrices own story](window-matrices-own-story.md) — ShowFolder3D window matrices + Seeds: their own window scenes, not copies of other matrices

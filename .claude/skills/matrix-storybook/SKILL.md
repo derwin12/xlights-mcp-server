@@ -54,6 +54,9 @@ python matrix_storybook.py stories/NAME.py "SHOW/SONG.xsq" "SHOW/Videos/<Song> S
 6. Wire it in, only with the sequence closed in xLights. Back up the .xsq (`.storybook.bak`), change the Video effect's
    filename, **and** change the matching `<SequenceMedia><Video path=...>` entry. Validate the XML. Tell the user to
    reopen the sequence, and that a stale copy open in xLights would overwrite the edit if saved.
+   Write paths with forward slashes (`Videos/<name>.mp4`): a backslash path made xLights' Media Compatibility check
+   report "Cannot open file". `<SequenceMedia>` may not exist yet and appears after the user's first save in xLights,
+   so when re-pointing a video later (a new version), grep the whole .xsq for the old file name.
 7. Open the result for the user with `Start-Process <file>`. To render frames in xLights itself
    (`render_model_frame`), xLights must be on that show folder. Ask before switching show folders.
 

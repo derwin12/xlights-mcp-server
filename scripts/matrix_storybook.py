@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import html
 import math
 import os
 import random
@@ -66,7 +67,9 @@ class Timing:
                 continue
             name = e.get("name")
             if name == "Lyrics" and len(layers) > 1:
-                self.words = [(f.get("label"), int(f.get("startTime")) / 1000, int(f.get("endTime")) / 1000)
+                # xLights saves apostrophes as literal "&apos;" text inside labels: decode them
+                self.words = [(html.unescape(f.get("label")), int(f.get("startTime")) / 1000,
+                               int(f.get("endTime")) / 1000)
                               for f in layers[1] if f.get("label")]
             elif name == "Beats":
                 self.beats = [int(f.get("startTime")) / 1000 for f in layers[0]]
