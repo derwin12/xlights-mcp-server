@@ -48,7 +48,7 @@ Give it an `.mp3`, and it will analyze the beats, song structure, and energy —
 
 - **Python 3.11+**
 - **[uv](https://docs.astral.sh/uv/)** (recommended) or pip
-- **ffmpeg** — for audio format handling (`brew install ffmpeg` on macOS, `apt install ffmpeg` on Linux)
+- **ffmpeg** — for audio format handling (`brew install ffmpeg` on macOS, `apt install ffmpeg` on Linux, `winget install Gyan.FFmpeg` on Windows)
 - **xLights** — installed with at least one show folder configured
 
 ---
@@ -197,6 +197,78 @@ transport: stdio
 </details>
 
 Replace `/path/to/xlights-mcp-server` with the actual path where you cloned the repo.
+
+---
+
+## Windows Setup
+
+A start-to-finish walkthrough for Windows 10/11, run in **PowerShell**.
+
+### 1. Install the prerequisites
+
+```powershell
+winget install Git.Git
+winget install astral-sh.uv
+winget install Gyan.FFmpeg
+```
+
+Close and reopen PowerShell so the new commands are on `PATH`. You don't need to install Python yourself — `uv` downloads Python 3.11+ if it's missing. xLights must already be installed with at least one show folder.
+
+### 2. Clone and install
+
+```powershell
+cd $HOME\Documents
+git clone https://github.com/derwin12/xlights-mcp-server.git
+cd xlights-mcp-server
+uv venv
+uv pip install -e ".[screenshots]"
+```
+
+The `screenshots` extra (includes `pywin32`) enables the xLights screenshot tools. Add `lyrics`, `separation`, `beats` or `all` as needed — see [Step 2](#step-2-create-a-virtual-environment-and-install) above.
+
+### 3. Point it at your show folder
+
+Folders under `Documents\xLights\` are found automatically. Otherwise create `C:\Users\<you>\.xlights-mcp\config.json`:
+
+```json
+{
+  "show_folders": { "christmas": "D:/xLights/Christmas" },
+  "active_show": "christmas"
+}
+```
+
+Use forward slashes or doubled backslashes (`D:\\xLights\\Christmas`) — a single `\` is an escape character in JSON.
+
+### 4. Connect your AI tool
+
+**Claude Code:**
+
+```powershell
+claude mcp add xlights -- uv run --directory C:\Users\<you>\Documents\xlights-mcp-server xlights-mcp-server
+```
+
+**Claude Desktop** — edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "xlights": {
+      "command": "uv",
+      "args": ["run", "--directory", "C:/Users/<you>/Documents/xlights-mcp-server", "xlights-mcp-server"]
+    }
+  }
+}
+```
+
+Then fully quit Claude Desktop from the system tray and restart it. Other clients use the same `command`/`args` as in [Step 4](#step-4-connect-to-your-ai-tool).
+
+### 5. Enable live control (optional)
+
+Tools that drive a running xLights (live effect edits, rendering frames/clips, screenshots) need xLights' automation service: in xLights, enable **Preferences → xFade**. Instance A listens on port **49913**, instance B on **49914**. Override with the `XLIGHTS_AUTOMATION_HOST` / `XLIGHTS_AUTOMATION_PORT` environment variables. Allow xLights through Windows Firewall if prompted.
+
+### 6. Verify
+
+Ask your AI tool: *"List my xLights shows"*, then *"List my models"*. If both return results, you're set.
 
 ---
 
