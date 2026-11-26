@@ -58,7 +58,7 @@ Give it an `.mp3`, and it will analyze the beats, song structure, and energy —
 ### Step 1: Clone the repository
 
 ```bash
-git clone https://github.com/JohnBreault/xlights-mcp-server.git
+git clone https://github.com/derwin12/xlights-mcp-server.git
 cd xlights-mcp-server
 ```
 
