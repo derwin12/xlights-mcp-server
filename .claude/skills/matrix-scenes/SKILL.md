@@ -24,7 +24,7 @@ python matrix_scenes.py stories/scenes/NAME.py "SHOW/SONG.xsq" --model MODEL --s
 
 ## How it maps to xLights
 - **Pictures** are tight-cropped RGBA PNGs at LED size with hard alpha: emoji posterised by matrix_storybook's
-  `icon_image` (FLAT), words in the 3x5 font (`s.word`, which has no Q, Z or digits), and props drawn with PIL
+  `icon_image` (FLAT), words in the 3x5 font (`s.word`, which has no Q, Z or digits; use `font=6` for those), and props drawn with PIL
   (`s.drawn`). They are embedded in `<SequenceMedia>` as `MatrixScenes/<PREFIX>/<name>.png` with `<Data>` base64,
   the same way the SuperStar importer stores its pictures. Re-running replaces that prefix's entries.
 - Positions are sprite centres in LED pixels (x right, y down). `_offsets` converts them to Pictures pixel offsets
@@ -37,6 +37,19 @@ python matrix_scenes.py stories/scenes/NAME.py "SHOW/SONG.xsq" --model MODEL --s
 - **z order** (higher is in front) is packed into layers automatically. The reference uses BG 0, sweep 10,
   ring 12, back pictures 18, pictures 20, front 25, words 30.
 - Times snap to the 25 ms frame grid.
+
+## Text styles (from the Burl Ives "Holly Jolly Christmas" 50x24 matrix video)
+- **Two-tone shaded text:** `s.word("CHRISTMAS", WHITE, font=6, shade=RED)` draws a coloured copy `off` px
+  (default `(scale, 0)`) behind a white face, so every stroke reads as a candy-cane stripe. `font=6` is a bold
+  6-row font with A-Z, 0-9 and punctuation; 9 letters fit across 50 LEDs. The 3x5 font takes `shade` too.
+  `color`/`shade` may be lists, cycled per letter (`[PURPLE, WHITE]`).
+- **Per-letter motion:** `s.letters("HOLLY", t0, t1, x, y, shade=GREEN, hits=beats, motion=...)` makes one picture
+  per letter. `motion="alternate"` makes odd and even letters take turns hopping up; use `phase=1` on a second line
+  so it hops opposite. `"wave"` hops one letter after another, `"jumble"` gives wobbly random heights each hit, and
+  `"still"` holds. `enter="drop"/"rise"/"pop"` brings the letters in one by one, `stagger` s apart.
+- Demos: `stories/scenes/text_styles_demo.py` (every style, 50x24) and `stories/scenes/hippo_words_demo.py`
+  (Hippo lyrics, two lines, each appearing as sung). Slide letters in from the edge nearest their line (`drop` for
+  the top line, `rise` for the bottom line) so they never pass through the other line.
 
 ## Several matrices as one stage
 `--model A,B` (comma-separated) builds a `Stage` from the layout (`xlights_rgbeffects.xml` next to the sequence,

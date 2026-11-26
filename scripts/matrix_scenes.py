@@ -67,6 +67,82 @@ def palette(*colors) -> str:
     return ",".join(parts)
 
 
+# ---------------------------------------------------------------- words
+
+# A 6-row font with 1-pixel strokes, so 9 letters (CHRISTMAS) fit across 50 LEDs. With a two-tone shade (the face
+# colour plus a copy in another colour 1 px to the right), each stroke reads as a 2-px candy-cane stripe - the
+# classic SuperStar / matrix-sequence text look.
+FONT6 = {k: v.split() for k, v in {
+    "A": ".##. #..# #..# #### #..# #..#", "B": "###. #..# ###. #..# #..# ###.",
+    "C": ".### #... #... #... #... .###", "D": "###. #..# #..# #..# #..# ###.",
+    "E": "#### #... ###. #... #... ####", "F": "#### #... ###. #... #... #...",
+    "G": ".### #... #... #.## #..# .###", "H": "#..# #..# #### #..# #..# #..#",
+    "I": "### .#. .#. .#. .#. ###", "J": "..## ...# ...# ...# #..# .##.",
+    "K": "#..# #.#. ##.. #.#. #..# #..#", "L": "#... #... #... #... #... ####",
+    "M": "#...# ##.## #.#.# #...# #...# #...#", "N": "#..# ##.# #.## #..# #..# #..#",
+    "O": ".##. #..# #..# #..# #..# .##.", "P": "###. #..# #..# ###. #... #...",
+    "Q": ".##. #..# #..# #..# #.#. .#.#", "R": "###. #..# #..# ###. #.#. #..#",
+    "S": ".### #... .##. ...# ...# ###.", "T": "### .#. .#. .#. .#. .#.",
+    "U": "#..# #..# #..# #..# #..# .##.", "V": "#...# #...# #...# .#.#. .#.#. ..#..",
+    "W": "#...# #...# #...# #.#.# ##.## #...#", "X": "#..# #..# .##. .##. #..# #..#",
+    "Y": "#.# #.# #.# .#. .#. .#.", "Z": "#### ...# ..#. .#.. #... ####",
+    "0": ".##. #..# #.## ##.# #..# .##.", "1": ".#. ##. .#. .#. .#. ###",
+    "2": ".##. #..# ..#. .#.. #... ####", "3": "###. ...# .##. ...# ...# ###.",
+    "4": "#..# #..# #### ...# ...# ...#", "5": "#### #... ###. ...# ...# ###.",
+    "6": ".##. #... ###. #..# #..# .##.", "7": "#### ...# ..#. .#.. .#.. .#..",
+    "8": ".##. #..# .##. #..# #..# .##.", "9": ".##. #..# #..# .### ...# .##.",
+    "!": "# # # # . #", "'": "# # . . . .", ".": ". . . . . #", ",": ".. .. .. .. .# #.",
+    "?": ".##. #..# ..#. .#.. .... .#..", "-": "... ... ### ... ... ...", "&": ".#.. #.#. .#.. #.## #.#. .#.#",
+    " ": ".. .. .. .. .. ..",
+}.items()}
+
+
+def _font(font: int) -> dict:
+    return FONT6 if font == 6 else mb.FONT
+
+
+def _per_letter(c, i: int):
+    """A colour, or a list of colours cycled per letter."""
+    if c is None:
+        return None
+    return tuple(c[i % len(c)]) if isinstance(c[0], (tuple, list)) else tuple(c)
+
+
+def text_image(s: str, color=(255, 255, 255), shade=None, off=(1, 0), font: int = 6, scale: int = 1,
+               first: int = 0) -> Image.Image:
+    """Words on a transparent canvas: `shade` (if any) drawn first, offset `off` px, then the face on top.
+    color/shade may be lists, cycled per letter (`first` is the cycle index of the first letter)."""
+    F = _font(font)
+    rows = len(F["A"])
+    glyphs = [F.get(ch, F.get(ch.upper(), F[" "])) for ch in s]
+    w = sum((len(g[0]) + 1) * scale for g in glyphs) - scale
+    dx, dy = off if shade is not None else (0, 0)
+    ox, oy = max(0, -dx), max(0, -dy)
+    im = Image.new("RGBA", (max(1, w + abs(dx)), rows * scale + abs(dy)), (0, 0, 0, 0))
+    px = im.load()
+    for pas in ("shade", "face") if shade is not None else ("face",):
+        cx = 0
+        for i, g in enumerate(glyphs):
+            c = _per_letter(shade if pas == "shade" else color, first + i)
+            sx0, sy0 = (ox + dx, oy + dy) if pas == "shade" else (ox, oy)
+            for gy, row in enumerate(g):
+                for gx, on in enumerate(row):
+                    if on == "#":
+                        for yy in range(scale):
+                            for xx in range(scale):
+                                px[sx0 + cx + gx * scale + xx, sy0 + gy * scale + yy] = c + (255,)
+            cx += (len(g[0]) + 1) * scale
+    return im
+
+
+def _ckey(c) -> str:
+    if c is None:
+        return "n"
+    if isinstance(c[0], (tuple, list)):
+        return "".join(hexc(x)[1:] for x in c)
+    return hexc(c)[1:]
+
+
 # ---------------------------------------------------------------- cues
 
 def norm(w: str) -> str:
@@ -160,7 +236,15 @@ class Story:
             self.image(key.rsplit("/", 1)[1][:-4], mb.icon_image(e, px, flip))
         return key
 
-    def word(self, s: str, color=(255, 255, 255), scale: int = 1, shadow: bool = False) -> str:
+    def word(self, s: str, color=(255, 255, 255), scale: int = 1, shadow: bool = False, *, shade=None,
+             off=None, font: int = 5) -> str:
+        """Words as one picture. font 5 (3x5) or 6 (bold 6-row). shade: a second colour drawn `off` px behind
+        the face (two-tone text, e.g. WHITE face + RED shade; off defaults to (scale, 0)). color/shade may be
+        lists cycled per letter."""
+        off = off or (scale, 0)
+        if shade is not None or font != 5 or isinstance(color[0], (tuple, list)):
+            im = text_image(s, color, shade, off, font, scale)
+            return self.image(f"w{font}_{norm(s) or 'x'}_{_ckey(color)}_{_ckey(shade)}_{off[0]}{off[1]}_{scale}", im)
         w = mb.text_width(s, scale) + 2
         im = Image.new("RGBA", (w, 5 * scale + 2), (0, 0, 0, 0))
         mb.blit_text(im, s, 0, 0, tuple(color) + (255,), scale, shadow=shadow)
@@ -262,6 +346,73 @@ class Story:
         """Slide through keyframes [(t, x, y), ...]; a repeated position holds."""
         for (ta, xa, ya), (tb, xb, yb) in zip(points, points[1:]):
             self.pic(key, ta, tb, xa, ya, to=(xb, yb) if (xa, ya) != (xb, yb) else None, z=z)
+
+    def letters(self, s: str, t0: float, t1: float, x: float, y: float, *, color=(255, 255, 255), shade=None,
+                off=None, font: int = 6, scale: int = 1, motion: str = "alternate", hits=(), amp: int = 2,
+                phase: int = 0, stagger: float = 0.08, enter: str | None = None, enter_s: float = 0.3, exit: str | None = None,
+                seed: int = 0, z: int = 30) -> list[str]:
+        """A word as one picture per letter, centred on (x, y), so the letters can move on their own.
+
+        motion on each of `hits`:
+          "alternate" - odd and even letters take turns sitting `amp` px up (H.O.L.L.Y with O and L raised);
+                        phase=1 starts with the other half up (a second line hopping opposite);
+          "wave"      - each letter hops `amp` px, one after another, `stagger` s apart;
+          "jumble"    - every letter jumps to a random height within +-amp (wobbly CHRISTMAS);
+          "still"     - no motion.
+        enter: "drop" / "rise" (letters slide in from the top / bottom edge one by one, `stagger` apart),
+        "pop" (pop in one by one),
+        or None (all appear at t0). exit: "fade", or None to cut. Returns the letter keys."""
+        F = _font(font)
+        off = off or (scale, 0)
+        full_h = len(F["A"]) * scale + (abs(off[1]) if shade is not None else 0)
+        glyphs = [F.get(ch, F.get(ch.upper(), F[" "])) for ch in s]
+        advs = [(len(g[0]) + 1) * scale for g in glyphs]
+        total = sum(advs) - scale + (abs(off[0]) if shade is not None else 0)
+        x0, y0 = round(x - total / 2), round(y - full_h / 2)
+        rnd = random.Random(seed)
+        hits = [h for h in hits if t0 < h < t1 - 0.1]
+        keys, cx = [], 0
+        for i, ch in enumerate(s):
+            if ch == " ":
+                cx += advs[i]
+                continue
+            im = text_image(ch, color, shade, off, font, scale, first=i)
+            l, t, r, b = im.getchannel("A").getbbox()
+            key = self.image(f"l{font}_{ord(ch):x}_{_ckey(_per_letter(color, i))}_{_ckey(_per_letter(shade, i))}"
+                             f"_{off[0]}{off[1]}_{scale}", im)
+            keys.append(key)
+            lx, ly = x0 + cx + (l + r) / 2, y0 + (t + b) / 2
+            cx += advs[i]
+            # when this letter arrives
+            ta = t0 + (i * stagger if enter in ("drop", "rise", "pop") else 0)
+            if enter in ("drop", "rise"):
+                side = "top" if enter == "drop" else "bottom"
+                self.pic(key, ta, ta + enter_s, *self.offscreen(key, lx, ly, side), to=(lx, ly), z=z)
+                ta += enter_s
+            elif enter == "pop":
+                self.pic(key, ta, ta + enter_s * 0.7, lx, ly, scale=(10, 130), z=z)
+                self.pic(key, ta + enter_s * 0.7, ta + enter_s, lx, ly, scale=(130, 100), z=z)
+                ta += enter_s
+            fo = 0.3 if exit == "fade" else 0
+            hs = [h for h in hits if h > ta + 0.05]
+            if motion == "wave":
+                self.hold(key, ta, t1, lx, ly, hits=[h + i * stagger for h in hs], amp=amp, fade_out=fo, z=z)
+                continue
+            # step motions: a list of (time, dy) holds
+            steps = [(ta, 0)]
+            for k, h in enumerate(hs):
+                if motion == "alternate":
+                    steps.append((h, -amp if (i + k + phase) % 2 == 0 else 0))
+                elif motion == "jumble":
+                    steps.append((h, rnd.randint(-amp, amp)))
+            merged = [steps[0]]
+            for st in steps[1:]:
+                if st[1] != merged[-1][1]:
+                    merged.append(st)
+            bounds = merged + [(t1, None)]
+            for (a, dy), (b, _) in zip(bounds, bounds[1:]):
+                self.pic(key, a, b, lx, ly + dy, fade_out=fo if b == t1 else 0, z=z)
+        return keys
 
     def flash(self, keys: list[str], times: list[float], x, y, z: int = 20, end: float | None = None):
         """Swap pictures on each time (SuperStar's quick image swaps): keys[i % n] from times[i] to times[i+1]."""
