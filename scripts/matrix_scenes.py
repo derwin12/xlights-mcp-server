@@ -321,6 +321,8 @@ class Story:
             self.pic(key, m, a, x, y, scale=(120, 100), z=z)
         elif enter == "fade":
             a = t0
+        if exit == "fade":  # the fade runs at the end of the hold itself, which lasts to t1
+            b = t1
         self.hold(key, a, b, x, y, hits=hits, amp=amp, fade_in=enter_s if enter == "fade" else 0,
                   fade_out=exit_s if exit == "fade" else 0, z=z)
         if exit in ("left", "right", "top", "bottom"):
@@ -330,7 +332,8 @@ class Story:
 
     def hold(self, key, t0, t1, x, y, *, hits=(), amp=2, fade_in=0, fade_out=0, z=20):
         """Hold still, hopping up `amp` pixels (0.1 s up, 0.15 s down) on each hit."""
-        hits = [h for h in hits if t0 + 0.05 <= h <= t1 - 0.3]
+        # no hop inside a fade: a short segment would cut the fade short
+        hits = [h for h in hits if t0 + max(0.05, fade_in) <= h <= t1 - max(0.3, fade_out + 0.25)]
         if fade_out and not hits:
             self.pic(key, t0, t1, x, y, fade_in=fade_in, fade_out=fade_out, z=z)
             return
