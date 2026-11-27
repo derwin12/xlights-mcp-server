@@ -32,7 +32,7 @@ python matrix_scenes.py stories/scenes/NAME.py "SHOW/SONG.xsq" --model MODEL --s
   and start/end scale (No Scaling) to pop around the sprite's own centre.
 - `show()` handles enter (left/right/top/bottom/pop/fade), hold with hops on `hits`, and exit. Other helpers:
   `glide()` moves through keyframes, `flash()` does quick SuperStar-style image swaps, `sweep()`/`morph()` draw
-  Morph bars (percent coordinates, y up), `ring()` is a Shockwave with Scale off so the radius is in pixels, plus
+  Morph bars (percent coordinates, y up; see Morph patterns below), `ring()` is a Shockwave with Scale off so the radius is in pixels, plus
   `twinkle()`, `snow()` and `wash()`.
 - **z order** (higher is in front) is packed into layers automatically. The reference uses BG 0, sweep 10,
   ring 12, back pictures 18, pictures 20, front 25, words 30.
@@ -50,6 +50,31 @@ python matrix_scenes.py stories/scenes/NAME.py "SHOW/SONG.xsq" --model MODEL --s
 - Demos: `stories/scenes/text_styles_demo.py` (every style, 50x24) and `stories/scenes/hippo_words_demo.py`
   (Hippo lyrics, two lines, each appearing as sung). Slide letters in from the edge nearest their line (`drop` for
   the top line, `rise` for the bottom line) so they never pass through the other line.
+
+## Morph patterns (what SuperStar does with Morphs)
+SuperStar's tree Morphs are rarely one full-width bar. About half are dots with short tails, and most of the rest
+are short bar segments. They fire in mirrored groups of 2 to 8 and are chained beat after beat. The settings are
+simple: 0.2 to 0.6 s, a 1 to 5 px head, no repeats or acceleration. `duration` controls the look: 100 gives a solid
+moving bar, and around 33 gives a long fading tail that fills the area it swept.
+- Pattern helpers draw one group inside `box=(x0,y0,x1,y1)`, which defaults to the whole matrix. Use a box per
+  bush or garage door. The helpers are `quad` (split from the centre to the sides), `stripes`, `comets` (mirrored
+  pairs), `burst` / converge, `corners` (diagonals collapsing into the corners), `frame` (edges closing to the
+  centre) and `spin`.
+- `morph_beats(t0, t1, colors, every=2)` chains them, alternating out and in. It replaces `bar_sweeps` where the
+  tree has no patterns.
+- `echo(t0, t1, box=, mirror=)` copies the tree's own SuperStar effects into the box. The tree is the model with
+  the most Morphs in the same .xsq, read at build time. It copies Morphs, and also Galaxy, Fan and Shockwave, whose
+  centre maps into the box and whose radius and width rescale to it (Scale to Buffer). Mirrored copies spin the
+  other way. Copy Morphs only where the tree is pattern-heavy, which is usually instrumentals, bridges and finales.
+  The round accents can be copied everywhere.
+- Reference: `stories/scenes/morph_backdrop.py`, which every four-matrix story calls from `run()`. It uses one copy
+  per garage door, per window and per half of the bushes, with every other copy mirrored, and a threshold of 8
+  tree Morphs per scene.
+- Echoes go on the main model, never on submodel layers. xLights draws submodels after the model's layers, so
+  echoes there would cover the pictures. Every copy adds layers, about the tree's own count (up to 11). Eight
+  per-bush copies came to about 10k effects and 144 layers, so use 2.
+- The preview renders Morphs with the algorithm ported from MorphEffect.cpp, so the sheet shows the real head and
+  tail.
 
 ## Several matrices as one stage
 `--model A,B` (comma-separated) builds a `Stage` from the layout (`xlights_rgbeffects.xml` next to the sequence,
