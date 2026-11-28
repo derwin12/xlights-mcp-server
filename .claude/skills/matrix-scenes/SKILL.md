@@ -37,6 +37,11 @@ python matrix_scenes.py stories/scenes/NAME.py "SHOW/SONG.xsq" --model MODEL --s
 - **z order** (higher is in front) is packed into layers automatically. The reference uses BG 0, sweep 10,
   ring 12, back pictures 18, pictures 20, front 25, words 30.
 - Times snap to the 25 ms frame grid.
+- `--out` replaces everything on the model. Check what the original has first: a vendor's signature effects can be
+  kept with `s.keep(t0, t1, kinds=("Pictures", "SingleStrand"), z=)`. It copies the source sequence's own effects
+  that start in that window, unchanged, and skips MatrixScenes pictures, so re-runs are stable. Example: Feliz
+  Navidad keeps its trumpet GIFs and horn chases on the garage during the horn verses (users notice when those
+  vanish).
 
 ## Text styles (from the Burl Ives "Holly Jolly Christmas" 50x24 matrix video)
 - **Two-tone shaded text:** `s.word("CHRISTMAS", WHITE, font=6, shade=RED)` draws a coloured copy `off` px
@@ -69,7 +74,9 @@ moving bar, and around 33 gives a long fading tail that fills the area it swept.
   The round accents can be copied everywhere.
 - Reference: `stories/scenes/morph_backdrop.py`, which every four-matrix story calls from `run()`. It uses one copy
   per garage door, per window and per half of the bushes, with every other copy mirrored, and a threshold of 8
-  tree Morphs per scene.
+  tree Morphs per scene. Some trees fire bursts of 100 to 190 Morphs at once, and copying those gave a 384 to 444
+  layer garage. For those songs pass `backdrop(s, t0, t1, peak=16..24)`: busier scenes then keep only the round
+  accents, and `pattern_sweeps` draws there instead.
 - Echoes go on the main model, never on submodel layers. xLights draws submodels after the model's layers, so
   echoes there would cover the pictures. Every copy adds layers, about the tree's own count (up to 11). Eight
   per-bush copies came to about 10k effects and 144 layers, so use 2.

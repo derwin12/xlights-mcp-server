@@ -293,6 +293,7 @@ class Story:
         self.fx: list[Fx] = []
         self.images: dict[str, Image.Image] = {} if images is None else images  # a Stage shares one set
         self.source: Path | None = None  # the sequence being built from (for echo())
+        self.model: str | None = None  # this story's model in that sequence (for keep())
 
     # ------------------------------------------------ pictures (assets)
 
@@ -739,6 +740,39 @@ class Story:
                     r=g("End_Radius", 10) * k_size * big / 200)
         self.fx.append(Fx(name, snap(tm["t0"]), snap(tm["t1"]), st, palette(*cols[:8]), z, look))
 
+    def keep(self, t0: float, t1: float, kinds=("Pictures", "SingleStrand"), *, z: int = 22) -> int:
+        """Carry over effects already on this model in the source sequence that start in [t0, t1), unchanged (times
+        too), e.g. a vendor's own pictures on the parts of the song they were made for. Pictures this tool made
+        (MatrixScenes/) are never kept, so re-running on its own output is stable. Returns how many."""
+        if self.source is None or self.model is None:
+            raise ValueError("keep() needs the sequence and model: run through matrix_scenes.py")
+        root = ET.parse(self.source).getroot()
+        db = [e.text or "" for e in root.find("EffectDB")]
+        pals = [p.text or "" for p in root.find("ColorPalettes")]
+        sm = root.find("SequenceMedia")
+        media = {m.get("path"): m.findtext("Data") for m in sm} if sm is not None else {}
+        n = 0
+        for el in root.find("ElementEffects"):
+            if el.get("name") != self.model or el.get("type") != "model":
+                continue
+            for lay in el.findall("EffectLayer"):  # the model's own layers, not its submodels
+                for e in lay.findall("Effect"):
+                    a = int(e.get("startTime")) / 1000
+                    if e.get("name") not in kinds or not (t0 <= a < t1) or not e.get("ref"):
+                        continue
+                    st = dict(x.split("=", 1) for x in db[int(e.get("ref"))].split(",") if "=" in x)
+                    fn = st.get("E_TEXTCTRL_Pictures_Filename", "")
+                    if fn.startswith("MatrixScenes/"):
+                        continue
+                    look = {}
+                    if e.get("name") == "Pictures" and media.get(fn):  # preview: first frame, scaled to fit
+                        look["fit"] = Image.open(io.BytesIO(base64.b64decode(media[fn]))).convert("RGBA")
+                    pal = pals[int(e.get("palette"))] if e.get("palette") else None
+                    self.fx.append(Fx(e.get("name"), int(e.get("startTime")), int(e.get("endTime")), st, pal, z,
+                                      look))
+                    n += 1
+        return n
+
     def ring(self, t: float, x: float, y: float, color, *, r: float = 24, width: float = 3, dur: float = 0.7,
              z: int = 12):
         """A Shockwave ring bursting out from (x, y) to radius r LED pixels."""
@@ -1001,6 +1035,10 @@ def write_xsq(stories: dict[str, Story], src: Path, out: Path) -> dict:
 
 def _pic_frame(story: Story, f: Fx, t: float, canvas: Image.Image):
     lk = f.look
+    if "key" not in lk:  # a kept picture (Story.keep): scaled to fit, or not previewable
+        if "fit" in lk:
+            canvas.alpha_composite(lk["fit"].resize((story.W, story.H), Image.NEAREST))
+        return
     pos = (t * 1000 - f.t0) / max(1, f.t1 - f.t0)
     im = story.images[lk["key"]]
     s = lk["s"][0] + (lk["s"][1] - lk["s"][0]) * pos
@@ -1250,8 +1288,9 @@ def main():
             W, H = g["W"], g["H"]
         story = Story(W, H, cues, prefix)
     story.source = a.xsq
-    for st in (story.stories().values() if isinstance(story, Stage) else ()):
-        st.source = a.xsq
+    story.model = models[0] if len(models) == 1 else None
+    for m, st in (story.stories().items() if isinstance(story, Stage) else ()):
+        st.source, st.model = a.xsq, m
     mod.build(story)
     stories = story.stories() if isinstance(story, Stage) else {models[0]: story}
     for m, st in stories.items():

@@ -1,7 +1,7 @@
 """SuperStar-style Morph backdrops shared by the four-matrix stories (garage, the two windows as a stage, bushes).
 
 backdrop(s, t0, t1): copy the SuperStar tree's Galaxy / Fan / Shockwave accents behind every scene, and its Morph
-patterns where it runs them (Story.echo): one copy per garage door, per window and per half of the bushes - each
+patterns where it runs them (Story.echo; `peak` skips scenes whose Morph bursts are too dense to copy): one copy per garage door, per window and per half of the bushes - each
 roughly the tree's shape - with every other copy mirrored. Returns whether the Morphs were copied, and remembers it
 on the story for pattern_sweeps().
 
@@ -37,14 +37,26 @@ def _copy(s, t0, t1, kinds):
             s.echo(t0, t1, box=box, mirror=mirror, kinds=kinds)
 
 
-def backdrop(s, t0, t1) -> bool:
+def tree_peak(ms) -> int:
+    """Most of these tree Morphs running at the same moment."""
+    cur = peak = 0
+    for _t, d in sorted([(m["t0"], 1) for m in ms] + [(m["t1"], -1) for m in ms]):
+        cur += d
+        peak = max(peak, cur)
+    return peak
+
+
+def backdrop(s, t0, t1, peak=None) -> bool:
     """The tree's Galaxy / Fan / Shockwave accents always; its Morph patterns when there are ECHO_MIN or more in
-    the scene. Returns (and remembers for pattern_sweeps) whether the Morphs were copied."""
+    the scene and, with `peak`, no more than that many run at once (a tree that fires bursts of 100+ Morphs would
+    need hundreds of layers per copy; those scenes get pattern_sweeps instead). Returns (and remembers for
+    pattern_sweeps) whether the Morphs were copied."""
     s._echo = False
     if s.source is None:
         return False
     _copy(s, t0, t1, ACCENTS)
-    if sum(1 for m in tree_morphs(s.source) if t0 <= m["t0"] < t1) < ECHO_MIN:
+    ms = [m for m in tree_morphs(s.source) if t0 <= m["t0"] < t1]
+    if len(ms) < ECHO_MIN or (peak is not None and tree_peak(ms) > peak):
         return False
     _copy(s, t0, t1, ("Morph",))
     s._echo = True
